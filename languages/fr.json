@@ -190,7 +190,8 @@
 		"addBookmark": "Ajouter signet",
 		"removeBookmark": "Retirer signet",
 		"emptyBookmarks": "Aucun signet",
-		"currentReading": "Lecture en cours"
+		"currentReading": "Lecture en cours",
+		"saveImage": "Enregistrer l'image"
 	},
 	"settings": {
 		"general": "",

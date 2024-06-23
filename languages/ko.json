@@ -190,7 +190,8 @@
 		"addBookmark": "",
 		"removeBookmark": "",
 		"emptyBookmarks": "",
-		"currentReading": ""
+		"currentReading": "",
+		"saveImage": "이미지를 저장"
 	},
 	"settings": {
 		"general": "일반",

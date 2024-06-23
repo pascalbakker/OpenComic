@@ -190,7 +190,8 @@
 		"addBookmark": "Añadir marcador",
 		"removeBookmark": "Eliminar marcador",
 		"emptyBookmarks": "No hay ningún marcador",
-		"currentReading": "Lectura actual"
+		"currentReading": "Lectura actual",
+		"saveImage": "Guardar imagen"
 	},
 	"settings": {
 		"general": "General",

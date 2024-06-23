@@ -5,6 +5,45 @@ const render = require(p.join(appDir, 'scripts/reading/render.js')),
 
 var images = {}, imagesData = {}, imagesDataClip = {}, imagesPath = {}, imagesNum = 0, contentNum = 0, imagesNumLoad = 0, currentIndex = 1, imagesPosition = {}, imagesFullPosition = {}, prevImagesFullPosition = {}, foldersPosition = {}, indexNum = 0, imagesDistribution = [], currentPageXY = {x: 0, y: 0}, currentMousePosition = {pageX: 0, pageY: 0};
 
+//Remove characters that are invalid in filesystem naming conventions
+function removeInvalidCharacters(unmodifiedTitle) {
+	if (unmodifiedTitle === null || unmodifiedTitle === undefined) return "";
+	let invalidCharactersToRemove = /[<>:"\/\\|?*\x00-\x1F]|amp;/g;
+	return unmodifiedTitle.toString().replace(invalidCharactersToRemove, '');
+}
+
+//Creates a string that will be used as the default filename when saving an image
+function createFileNameForImage(imageExtension) {
+	let seriesTitleInnerHTML = document.getElementsByClassName("bar-title-a")[0].innerHTML;
+	let documentTitle = document.title;
+	let seriesTitle = seriesTitleInnerHTML ? removeInvalidCharacters(seriesTitleInnerHTML) : "";
+	let issueTitle = documentTitle? removeInvalidCharacters(documentTitle) : "";
+	let pageNumber = currentIndex ? "Page" + currentIndex : "";
+	return seriesTitle + "_" +
+		issueTitle + "_" +
+		pageNumber + "." +
+		imageExtension;
+}
+
+//Saves current page to filesystem
+function saveImage() {
+	let imageToSave = images[currentIndex].src;
+	let imageExtension = imageToSave.split('.').pop();
+	if (imageToSave && imageExtension) {
+		fetch(imageToSave)
+			.then(response => response.blob())
+			.then(blob => {
+				let link = document.createElement('a');
+				link.href = window.URL.createObjectURL(blob);
+				link.download = createFileNameForImage(imageExtension);
+				link.click();
+			})
+			.catch(error => console.error('Error saving image to local fileystem:', error));
+	} else {
+		console.error("Could not retrieve the current image");
+	}
+}
+
 //Calculates whether to add a blank image (If the reading is in double page and do not apply to the horizontals)
 function blankPage(index)
 {
@@ -5272,6 +5311,7 @@ module.exports = {
 	saveReadingProgressA: function(){return saveReadingProgressA},
 	setFromSkip: setFromSkip,
 	createAndDeleteBookmark: createAndDeleteBookmark,
+	saveImage: saveImage,
 	deleteBookmark: deleteBookmark,
 	currentIndex: function(){return currentIndex},
 	currentPageVisibility: function(){return currentPageVisibility},

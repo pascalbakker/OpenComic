@@ -257,6 +257,12 @@ function loadShortcuts()
 						return true;
 					},
 				},
+				saveImage: {
+					name: language.reading.saveImage,
+					function: function () {
+						reading.saveImage();
+					}
+				},
 				zoomIn: {
 					name: language.menu.view.zoomIn,
 					function: function(){

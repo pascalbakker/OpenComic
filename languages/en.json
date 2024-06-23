@@ -190,7 +190,8 @@
 		"addBookmark": "Add bookmark",
 		"removeBookmark": "Remove bookmark",
 		"emptyBookmarks": "No bookmarks",
-		"currentReading": "Current reading"
+		"currentReading": "Current reading",
+		"saveImage": "Save image"
 	},
 	"settings": {
 		"general": "General",

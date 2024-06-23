@@ -190,7 +190,8 @@
 		"addBookmark": "Könyvjelző hozzáadása",
 		"removeBookmark": "Könyvjelző törlése",
 		"emptyBookmarks": "Nincsenek könyvjelzők",
-		"currentReading": "Most olvasott"
+		"currentReading": "Most olvasott",
+		"saveImage": "Kép mentése"
 	},
 	"settings": {
 		"general": "",

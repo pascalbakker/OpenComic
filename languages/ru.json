@@ -190,7 +190,8 @@
 		"addBookmark": "Добавить закладку",
 		"removeBookmark": "Удалить закладку",
 		"emptyBookmarks": "Нет закладок",
-		"currentReading": "Текущее чтение"
+		"currentReading": "Текущее чтение",
+		"saveImage": "Сохранить изображение"
 	},
 	"settings": {
 		"general": "",

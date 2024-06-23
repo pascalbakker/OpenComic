@@ -190,7 +190,8 @@
 		"addBookmark": "Aggiungi segnalibro",
 		"removeBookmark": "Rimuovi segnalibro",
 		"emptyBookmarks": "Nessun segnalibro",
-		"currentReading": "Lettura attuale"
+		"currentReading": "Lettura attuale",
+		"saveImage": "Salva immagine"
 	},
 	"settings": {
 		"general": "",
