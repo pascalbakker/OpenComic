@@ -1843,7 +1843,7 @@ var fileCompressed = function(path, _realPath = false, forceType = false, prefix
 	// 7z
 	this._7z = false;
 
-	this.open7z = async function(extract = false, only = '') {
+	this.open7z = async function(extract = false) {
 
 		// Not support this cache
 		// if(this._7z) return this._7z;
@@ -1854,7 +1854,7 @@ var fileCompressed = function(path, _realPath = false, forceType = false, prefix
 		this.macosStartAccessingSecurityScopedResource(this.realPath);
 
 		if(extract)
-			this._7z = un7z.extractFull(this.realPath, this.tmp, {$bin: bin7z, $progress: true, $cherryPick: only, charset: 'UTF-8', listFileCharset: 'UTF-8'});
+			this._7z = un7z.extractFull(this.realPath, this.tmp, {$bin: bin7z, $progress: true, charset: 'UTF-8', listFileCharset: 'UTF-8'});
 		else
 			this._7z = un7z.list(this.realPath, {$bin: bin7z, charset: 'UTF-8', listFileCharset: 'UTF-8'});
 
@@ -1918,7 +1918,7 @@ var fileCompressed = function(path, _realPath = false, forceType = false, prefix
 		let only = this.config.only; 
 		let _this = this;
 
-		let _7z = await this.open7z(true, this.config._only || false);
+		let _7z = await this.open7z(true);
 		let extractedSome = false;
 
 		return new Promise(function(resolve, reject) {

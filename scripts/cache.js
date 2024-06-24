@@ -222,8 +222,10 @@ function returnThumbnailsImages(images, callback, file = false)
 		file.makeAvailable(toGenerateThumbnails, function(image) {
 
 			let data = toGenerateThumbnailsData[image.path];
-			let _size = data.type ? sizes[data.type] : size;
-			addImageToQueue(image.path, _size, data.sha, callback, data.vars || false, data.type);
+			if(data !== null || data !== undefined && data.type !== null && data.type !== undefined) {
+				let _size = data.type ? sizes[data.type] : size;
+				addImageToQueue(image.path, _size, data.sha, callback, data.vars || false, data.type);
+			}
 
 		}, false, true);
 	}
