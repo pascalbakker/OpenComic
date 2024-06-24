@@ -1843,7 +1843,7 @@ var fileCompressed = function(path, _realPath = false, forceType = false, prefix
 	// 7z
 	this._7z = false;
 
-	this.open7z = async function(extract = false, only = '') {
+	this.open7z = function(extract = false, only = '') {
 
 		// Not support this cache
 		// if(this._7z) return this._7z;
@@ -1869,7 +1869,7 @@ var fileCompressed = function(path, _realPath = false, forceType = false, prefix
 		console.time('read7z: '+this.path);
 		let _this = this;
 
-		let _7z = await this.open7z();
+		let _7z = this.open7z();
 		let readSome = false;
 
 		return new Promise(function(resolve, reject) {
@@ -1918,7 +1918,7 @@ var fileCompressed = function(path, _realPath = false, forceType = false, prefix
 		let only = this.config.only; 
 		let _this = this;
 
-		let _7z = await this.open7z(true, this.config._only || false);
+		let _7z = this.open7z(true, this.config._only || false);
 		let extractedSome = false;
 
 		return new Promise(function(resolve, reject) {
