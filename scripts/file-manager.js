@@ -1,3109 +1,2880 @@
-var unzip = false, unrar = false, un7z = false, bin7z = false, untar = false/*, unpdf = false*/, fastXmlParser = false, fileType = false;
+var unzip = false, unrar = false, un7z = false, bin7z = false, untar = false/*, unpdf = false*/, fastXmlParser = false,
+    fileType = false;
 
-var file = function(path, _config = false) {
+var file = function (path, _config = false) {
 
-	this.path = path;
+    this.path = path;
 
-	this.files = [];
+    this.files = [];
 
-	this.isCompressed = false;
-	this.isFolder = false;
+    this.isCompressed = false;
+    this.isFolder = false;
 
-	this.config = {
-		cache: true, // Compressed
-		sort: true,
-		filtered: true,
-		sha: true,
-		only: false,
-	};
+    this.config = {
+        cache: true, // Compressed
+        sort: true,
+        filtered: true,
+        sha: true,
+        only: false,
+    };
 
-	if(_config) this.config = {...this.config, ..._config};
+    if (_config) this.config = {...this.config, ..._config};
 
-	this.updateConfig = function(config) {
+    this.updateConfig = function (config) {
 
-		for(let key in config)
-		{
-			this.config[key] = config[key];
-		}
+        for (let key in config) {
+            this.config[key] = config[key];
+        }
 
-	}
+    }
 
-	this.getType = function() {
+    this.getType = function () {
 
-		if(fs.existsSync(path))
-		{
-			if(inArray(fileExtension(path), compressedExtensions.all))
-				this.isCompressed = true;
-			else if(fs.statSync(path).isDirectory())
-				this.isFolder = true;
-		}
+        if (fs.existsSync(path)) {
+            if (inArray(fileExtension(path), compressedExtensions.all))
+                this.isCompressed = true;
+            else if (fs.statSync(path).isDirectory())
+                this.isFolder = true;
+        }
 
-		return {folder: this.isFolder, compressed: this.isCompressed};
-	}
+        return {folder: this.isFolder, compressed: this.isCompressed};
+    }
 
-	this.alreadyRead = false;
+    this.alreadyRead = false;
 
-	this.read = async function(config = {}, path = false) {
+    this.read = async function (config = {}, path = false) {
 
-		path = path || this.path;
-		let _realPath = realPath(path, -1);
+        path = path || this.path;
+        let _realPath = realPath(path, -1);
 
-		this.updateConfig(config);
+        this.updateConfig(config);
 
-		let files = [];
+        let files = [];
 
-		if(isServer(path))
-		{
-			if(inArray(fileExtension(path), compressedExtensions.all) || !containsCompressed(path))
-				files = await this.readServer(path, _realPath);
-			else
-				files = await this.readInsideCompressedServer(path, _realPath);
-		}
-		else if(containsCompressed(path))
-		{
-			if(inArray(fileExtension(path), compressedExtensions.all))
-				files = await this.readCompressed(path, _realPath);
-			else
-				files = await this.readInsideCompressed(path, _realPath);
-		}
-		else
-		{
-			if(inArray(fileExtension(path), compressedExtensions.all))
-				files = await this.readCompressed(path, _realPath);
-			else if(fs.statSync(_realPath).isDirectory())
-				files = await this.readDir(path, _realPath);
-		}
+        if (isServer(path)) {
+            if (inArray(fileExtension(path), compressedExtensions.all) || !containsCompressed(path))
+                files = await this.readServer(path, _realPath);
+            else
+                files = await this.readInsideCompressedServer(path, _realPath);
+        } else if (containsCompressed(path)) {
+            if (inArray(fileExtension(path), compressedExtensions.all))
+                files = await this.readCompressed(path, _realPath);
+            else
+                files = await this.readInsideCompressed(path, _realPath);
+        } else {
+            if (inArray(fileExtension(path), compressedExtensions.all))
+                files = await this.readCompressed(path, _realPath);
+            else if (fs.statSync(_realPath).isDirectory())
+                files = await this.readDir(path, _realPath);
+        }
 
-		if(this.config.sort)
-			files = sort(files);
+        if (this.config.sort)
+            files = sort(files);
 
-		if(this.config.only && typeof this.config.only === 'number')
-			files = this.only(files);
+        if (this.config.only && typeof this.config.only === 'number')
+            files = this.only(files);
 
-		if(this.config.sha)
-			files = this.sha(files);
+        if (this.config.sha)
+            files = this.sha(files);
 
-		if(this.path === path)
-		{
-			this.alreadyRead = true;
-			this.files = files;
-		}
+        if (this.path === path) {
+            this.alreadyRead = true;
+            this.files = files;
+        }
 
-		return this.config.filtered ? filtered(files, this.config.specialFiles) : files;
-	}
+        return this.config.filtered ? filtered(files, this.config.specialFiles) : files;
+    }
 
-	this.readDir = function(path = false, _realPath = false) {
+    this.readDir = function (path = false, _realPath = false) {
 
-		path = path || this.path;
-		_realPath = _realPath || realPath(path, -1);
+        path = path || this.path;
+        _realPath = _realPath || realPath(path, -1);
 
-		let _this = this;
+        let _this = this;
 
-		this.macosStartAccessingSecurityScopedResource(_realPath);
+        this.macosStartAccessingSecurityScopedResource(_realPath);
 
-		return fsp.readdir(_realPath, {withFileTypes: !_this.config.fastRead}).then(function(_files){
+        return fsp.readdir(_realPath, {withFileTypes: !_this.config.fastRead}).then(function (_files) {
 
-			let files = [];
+            let files = [];
 
-			if(_files)
-			{
-				for(let i = 0, len = _files.length; i < len; i++)
-				{
-					let name = _this.config.fastRead ? _files[i] : _files[i].name;
+            if (_files) {
+                for (let i = 0, len = _files.length; i < len; i++) {
+                    let name = _this.config.fastRead ? _files[i] : _files[i].name;
 
-					let filePath = p.join(path, name);
-					let retrunPath = filePath;
+                    let filePath = p.join(path, name);
+                    let retrunPath = filePath;
 
-					if(!_this.config.fastRead && _files[i].isDirectory())
-						files.push({name: name, path: retrunPath, folder: true, compressed: false});
-					else if(inArray(fileExtension(filePath), compressedExtensions.all))
-						files.push({name: name, path: retrunPath, folder: false, compressed: true});
-					else
-						files.push({name: name, path: retrunPath, folder: false, compressed: false});
-				}
-			}
+                    if (!_this.config.fastRead && _files[i].isDirectory())
+                        files.push({name: name, path: retrunPath, folder: true, compressed: false});
+                    else if (inArray(fileExtension(filePath), compressedExtensions.all))
+                        files.push({name: name, path: retrunPath, folder: false, compressed: true});
+                    else
+                        files.push({name: name, path: retrunPath, folder: false, compressed: false});
+                }
+            }
 
-			return files;
+            return files;
 
-		});
+        });
 
-	}
+    }
 
-	this.compressedOpened = {};
+    this.compressedOpened = {};
 
-	this.cleanCompressedOpened = function() {
+    this.cleanCompressedOpened = function () {
 
-		let compressed = [];
+        let compressed = [];
 
-		for(let path in this.compressedOpened)
-		{
-			compressed.push({path: path, lastUsage: this.compressedOpened[path].lastUsage});
-		}
+        for (let path in this.compressedOpened) {
+            compressed.push({path: path, lastUsage: this.compressedOpened[path].lastUsage});
+        }
 
-		compressed.sort(function(a, b) {
+        compressed.sort(function (a, b) {
 
-			if(a.lastUsage === b.lastUsage)
-				return 0;
+            if (a.lastUsage === b.lastUsage)
+                return 0;
 
-			return a.lastUsage < b.lastUsage ? 1 : -1;
-		});
+            return a.lastUsage < b.lastUsage ? 1 : -1;
+        });
 
-		let len = compressed.length;
+        let len = compressed.length;
 
-		if(len > 10) // Max only 10 files open at the same time
-		{
-			for(let i = 10; i < len; i++)
-			{
-				let path = compressed[i].path;
-				this.compressedOpened[path].compressed.destroy();
-				delete this.compressedOpened[path];
-			}
-		}
-	}
+        if (len > 10) // Max only 10 files open at the same time
+        {
+            for (let i = 10; i < len; i++) {
+                let path = compressed[i].path;
+                this.compressedOpened[path].compressed.destroy();
+                delete this.compressedOpened[path];
+            }
+        }
+    }
 
-	this.openCompressed = function(path, _realPath = false, mtime = false) {
+    this.openCompressed = function (path, _realPath = false, mtime = false) {
 
-		if(this.config.prefixes)
-			_realPath = _realPath || realPath(path, -1, this.config.prefixes);
-		else
-			_realPath = _realPath || realPath(path, -1);
+        if (this.config.prefixes)
+            _realPath = _realPath || realPath(path, -1, this.config.prefixes);
+        else
+            _realPath = _realPath || realPath(path, -1);
 
-		mtime = mtime || fs.statSync(firstCompressedFileRealPath(path)).mtime.getTime();
+        mtime = mtime || fs.statSync(firstCompressedFileRealPath(path)).mtime.getTime();
 
-		let now = Date.now();
+        let now = Date.now();
 
-		if(!this.compressedOpened[path] || this.compressedOpened[path].mtimeMainCompressed != mtime) // Check if the Compressed file has been modified since the last time it was opened
-		{
-			this.compressedOpened[path] = {
-				lastUsage: now,
-				mtimeMainCompressed: mtime,
-				compressed: fileManager.fileCompressed(path, _realPath, this.config.forceType, this.config.prefixes),
-			};
-		}
-		else
-		{
-			this.compressedOpened[path].lastUsage = now;
-		}
+        if (!this.compressedOpened[path] || this.compressedOpened[path].mtimeMainCompressed != mtime) // Check if the Compressed file has been modified since the last time it was opened
+        {
+            this.compressedOpened[path] = {
+                lastUsage: now,
+                mtimeMainCompressed: mtime,
+                compressed: fileManager.fileCompressed(path, _realPath, this.config.forceType, this.config.prefixes),
+            };
+        } else {
+            this.compressedOpened[path].lastUsage = now;
+        }
 
-		this.cleanCompressedOpened();
+        this.cleanCompressedOpened();
 
-		if(this.config.progress)
-			this.compressedOpened[path].compressed.progress = this.config.progress;
+        if (this.config.progress)
+            this.compressedOpened[path].compressed.progress = this.config.progress;
 
-		if(this.config.fromThumbnailsGeneration)
-			this.compressedOpened[path].compressed.config.fromThumbnailsGeneration = true;
+        if (this.config.fromThumbnailsGeneration)
+            this.compressedOpened[path].compressed.config.fromThumbnailsGeneration = true;
 
-		return this.compressedOpened[path].compressed;
+        return this.compressedOpened[path].compressed;
 
-	}
+    }
 
-	this.readCompressed = async function(path = false, _realPath = false) {
+    this.readCompressed = async function (path = false, _realPath = false) {
 
-		path = path || this.path;
-		_realPath = _realPath || realPath(path, -1);
+        path = path || this.path;
+        _realPath = _realPath || realPath(path, -1);
 
-		let _isServer = isServer(path);
+        let _isServer = isServer(path);
 
-		let mtime = !_isServer ? fs.statSync(firstCompressedFile(path)).mtime.getTime() : 1;
-		let compressed = this.openCompressed(path, _realPath, mtime);
+        let mtime = !_isServer ? fs.statSync(firstCompressedFile(path)).mtime.getTime() : 1;
+        let compressed = this.openCompressed(path, _realPath, mtime);
 
-		let json = cache.readJson(compressed.cacheFile);
+        let json = cache.readJson(compressed.cacheFile);
 
-		if(this.config.cache)
-		{
-			if(json)
-			{
-				if(json.mtime == mtime || _isServer)
-				{
-					if(json.error && !this.config.fromThumbnailsGeneration && !this.config.subtask)
-						dom.compressedError({message: json.error}, false, sha1(this.path));
+        if (this.config.cache) {
+            if (json) {
+                if (json.mtime == mtime || _isServer) {
+                    if (json.error && !this.config.fromThumbnailsGeneration && !this.config.subtask)
+                        dom.compressedError({message: json.error}, false, sha1(this.path));
 
-					return json.files;
-				}
+                    return json.files;
+                }
 
-				if(fs.existsSync(compressed.tmp))
-					await fsp.rmdir(compressed.tmp, {recursive: true});
-			}
-		}
+                if (fs.existsSync(compressed.tmp))
+                    await fsp.rmdir(compressed.tmp, {recursive: true});
+            }
+        }
 
-		if(this.config.cacheOnly)
-			throw new Error('notCacheOnly');
+        if (this.config.cacheOnly)
+            throw new Error('notCacheOnly');
 
-		await this.extractIfInsideAnotherCompressed(path, _realPath);
+        await this.extractIfInsideAnotherCompressed(path, _realPath);
 
-		let files = await compressed.read(this.config);
-		let metadata = await compressed.readMetadata(this.config);
-		this.saveCompressedMetadata(path, metadata);
+        let files = await compressed.read(this.config);
+        let metadata = await compressed.readMetadata(this.config);
+        this.saveCompressedMetadata(path, metadata);
 
-		if(metadata.poster)
-			files = this.setPosterFromMetadata(files, metadata.poster);
+        if (metadata.poster)
+            files = this.setPosterFromMetadata(files, metadata.poster);
 
-		if(!json || json.mtime != mtime)
-			cache.writeJson(compressed.cacheFile, {mtime: mtime, files: files, metadata: metadata});
+        if (!json || json.mtime != mtime)
+            cache.writeJson(compressed.cacheFile, {mtime: mtime, files: files, metadata: metadata});
 
-		return files;
+        return files;
 
-	}
+    }
 
-	this.readInsideCompressed = async function(path = false, _realPath = false) {
+    this.readInsideCompressed = async function (path = false, _realPath = false) {
 
-		path = path || this.path;
-		_realPath = _realPath || realPath(path, -1);
+        path = path || this.path;
+        _realPath = _realPath || realPath(path, -1);
 
-		let lastCompressed = lastCompressedFile(path);
+        let lastCompressed = lastCompressedFile(path);
 
-		let files = [];
+        let files = [];
 
-		if(lastCompressed)
-		{
-			let _files = await this.readCompressed(lastCompressed);
-			files = this.readFromFilesList(_files, path, lastCompressed);
-		}
+        if (lastCompressed) {
+            let _files = await this.readCompressed(lastCompressed);
+            files = this.readFromFilesList(_files, path, lastCompressed);
+        }
 
-		return files;
+        return files;
 
-	}
+    }
 
-	this.serverHasCache = function(path) {
+    this.serverHasCache = function (path) {
 
-		path = serverClient.fixPath(path || this.path);
-		let sha = sha1(path);
-		let cacheFile = 'server-files-'+sha+'.json.zstd';
+        path = serverClient.fixPath(path || this.path);
+        let sha = sha1(path);
+        let cacheFile = 'server-files-' + sha + '.json.zstd';
 
-		return cache.existsFile(cacheFile);
+        return cache.existsFile(cacheFile);
 
-	}
+    }
 
-	this.readServer = async function(path = false, _realPath = false) {
+    this.readServer = async function (path = false, _realPath = false) {
 
-		path = serverClient.fixPath(path || this.path);
-		_realPath = _realPath || realPath(path, -1);
+        path = serverClient.fixPath(path || this.path);
+        _realPath = _realPath || realPath(path, -1);
 
-		let sha = sha1(path);
-		let cacheFile = 'server-files-'+sha+'.json';
+        let sha = sha1(path);
+        let cacheFile = 'server-files-' + sha + '.json';
 
-		let _containsCompressed = containsCompressed(path, 0, false);
+        let _containsCompressed = containsCompressed(path, 0, false);
 
-		if(this.config.cache && (this.config.cacheOnly || this.config.cacheServer || serverInOfflineMode))
-		{
-			if(_containsCompressed)
-				return this.readCompressed(path);
+        if (this.config.cache && (this.config.cacheOnly || this.config.cacheServer || serverInOfflineMode)) {
+            if (_containsCompressed)
+                return this.readCompressed(path);
 
-			let json = cache.readJson(cacheFile);
+            let json = cache.readJson(cacheFile);
 
-			if(json)
-				return json.files;
-		}
+            if (json)
+                return json.files;
+        }
 
-		if(serverInOfflineMode)
-			return [];
+        if (serverInOfflineMode)
+            return [];
 
-		if(this.config.cacheOnly)
-			throw new Error('notCacheOnly');
+        if (this.config.cacheOnly)
+            throw new Error('notCacheOnly');
 
-		let files = [];
+        let files = [];
 
-		if(_containsCompressed)
-		{
-			let firstCompressed = firstCompressedFile(path, 0);
+        if (_containsCompressed) {
+            let firstCompressed = firstCompressedFile(path, 0);
 
-			// Download file to tmp
-			let file = await serverClient.download(path, {only: [firstCompressed]});
+            // Download file to tmp
+            let file = await serverClient.download(path, {only: [firstCompressed]});
 
-			if(this.config.fromThumbnailsGeneration)
-				downloadedCompressedFile(firstCompressed);
+            if (this.config.fromThumbnailsGeneration)
+                downloadedCompressedFile(firstCompressed);
 
-			return this.readCompressed(path);
-		}
-		else
-		{
-			files = await serverClient.read(path);
-		}
+            return this.readCompressed(path);
+        } else {
+            files = await serverClient.read(path);
+        }
 
-		return files;
+        return files;
 
-	}
+    }
 
-	this.readInsideCompressedServer = async function(path = false, _realPath = false) {
+    this.readInsideCompressedServer = async function (path = false, _realPath = false) {
 
-		path = path || this.path;
-		_realPath = _realPath || realPath(path, -1);
+        path = path || this.path;
+        _realPath = _realPath || realPath(path, -1);
 
-		let firstCompressed = firstCompressedFile(path, 0);
+        let firstCompressed = firstCompressedFile(path, 0);
 
-		if(firstCompressed)
-		{
-			// Download file to tmp
-			let file = await serverClient.download(path, {only: [firstCompressed]});
+        if (firstCompressed) {
+            // Download file to tmp
+            let file = await serverClient.download(path, {only: [firstCompressed]});
 
-			if(this.config.fromThumbnailsGeneration)
-				downloadedCompressedFile(firstCompressed);
-		}
+            if (this.config.fromThumbnailsGeneration)
+                downloadedCompressedFile(firstCompressed);
+        }
 
-		return this.readInsideCompressed(path, _realPath);
+        return this.readInsideCompressed(path, _realPath);
 
-	}
+    }
 
-	// If compressed is inside other compressed, decompress here others compressed files (Only compresses files ignoring others files)
-	this.extractIfInsideAnotherCompressed = async function(path = false, _realPath = false) {
+    // If compressed is inside other compressed, decompress here others compressed files (Only compresses files ignoring others files)
+    this.extractIfInsideAnotherCompressed = async function (path = false, _realPath = false) {
 
-		path = path || this.path;
-		_realPath = _realPath || realPath(path, -1);
+        path = path || this.path;
+        _realPath = _realPath || realPath(path, -1);
 
-		if(_realPath !== path && !fs.existsSync(_realPath))
-		{
-			let compressedFiles = allCompressedFiles(path);
+        if (_realPath !== path && !fs.existsSync(_realPath)) {
+            let compressedFiles = allCompressedFiles(path);
 
-			for(let i = 0, len = compressedFiles.length - 1; i < len; i++)
-			{
-				let path = compressedFiles[i];
-				let _realPath = realPath(path, -1);
-				let _realPathNext = realPath(compressedFiles[i+1], -1);
-				let only = removePathPart(compressedFiles[i+1], path);
+            for (let i = 0, len = compressedFiles.length - 1; i < len; i++) {
+                let path = compressedFiles[i];
+                let _realPath = realPath(path, -1);
+                let _realPathNext = realPath(compressedFiles[i + 1], -1);
+                let only = removePathPart(compressedFiles[i + 1], path);
 
-				if(!fs.existsSync(_realPathNext))
-				{
-					let toDecompress = this.openCompressed(path, _realPath);
-					await toDecompress.extract({only: [only]});
-				}
-			}
-		}
+                if (!fs.existsSync(_realPathNext)) {
+                    let toDecompress = this.openCompressed(path, _realPath);
+                    await toDecompress.extract({only: [only]});
+                }
+            }
+        }
 
-		return;
-	}
+        return;
+    }
 
-	this._images = async function(num, files, from = false, fromReached = false, poster = false, deep = 0) {
+    this._images = async function (num, files, from = false, fromReached = false, poster = false, deep = 0) {
 
-		let images = [];
-		let imagesNum = 0;
+        let images = [];
+        let imagesNum = 0;
 
-		let reverse = num < 0 ? true : false;
-		let len = files.length;
+        let reverse = num < 0 ? true : false;
+        let len = files.length;
 
-		let stop = len == 0 ? true : false;
-		let i = reverse ? len - 1 : 0;
+        let stop = len == 0 ? true : false;
+        let i = reverse ? len - 1 : 0;
 
-		let index = 0;
+        let index = 0;
 
-		while(!stop)
-		{
-			let file = files[i];
-			let image = false;
+        while (!stop) {
+            let file = files[i];
+            let image = false;
 
-			if(!from || fromReached || new RegExp('^\s*'+pregQuote(file.path)).test(from))
-			{
-				if(file.folder || file.compressed)
-				{
-					let _poster = false;
-					let _files = file.files || await this.read({}, file.path);
+            if (!from || fromReached || new RegExp('^\s*' + pregQuote(file.path)).test(from)) {
+                if (file.folder || file.compressed) {
+                    let _poster = false;
+                    let _files = file.files || await this.read({}, file.path);
 
-					if(poster)
-					{
-						_poster = this._poster(files, file.path);
-						if(!_poster) _poster = this._poster(_files, file.path, true);
-					}
+                    if (poster) {
+                        _poster = this._poster(files, file.path);
+                        if (!_poster) _poster = this._poster(_files, file.path, true);
+                    }
 
-					if(_poster)
-					{
-						image = _poster.path;
-					}
-					else
-					{
-						image = await this._images(reverse ? -1 : 1, _files, from, fromReached, poster, deep + 1);
-						fromReached = image.fromReached;
-						image = image.images[0] || false;
-					}
-				}
-				else if(inArray(mime.getType(file.name), compatibleMime))
-				{
-					image = file.path;
-				}
+                    if (_poster) {
+                        image = _poster.path;
+                    } else {
+                        image = await this._images(reverse ? -1 : 1, _files, from, fromReached, poster, deep + 1);
+                        fromReached = image.fromReached;
+                        image = image.images[0] || false;
+                    }
+                } else if (inArray(mime.getType(file.name), compatibleMime)) {
+                    image = file.path;
+                }
 
-				if(image && (!from || fromReached))
-				{
-					images.push(image);
-					imagesNum++;
+                if (image && (!from || fromReached)) {
+                    images.push(image);
+                    imagesNum++;
 
-					if(imagesNum == Math.abs(num))
-						break;
-				}
-			}
+                    if (imagesNum == Math.abs(num))
+                        break;
+                }
+            }
 
-			if(file.path === from)
-				fromReached = true;
+            if (file.path === from)
+                fromReached = true;
 
-			if(reverse)
-			{
-				i--;
-				stop = i < 0 ? true : false;
-			}
-			else
-			{
-				i++;
-				stop = i >= len ? true : false;
-			}
+            if (reverse) {
+                i--;
+                stop = i < 0 ? true : false;
+            } else {
+                i++;
+                stop = i >= len ? true : false;
+            }
 
-			if(this.config.cacheOnly && index > 16 && deep > 0)
-				throw new Error('notCacheOnly');
+            if (this.config.cacheOnly && index > 16 && deep > 0)
+                throw new Error('notCacheOnly');
 
-			index++;
-		}
+            index++;
+        }
 
-		return {images: images, fromReached: fromReached};
-	}
+        return {images: images, fromReached: fromReached};
+    }
 
-	// Get the first images of a folder/compressed
-	this.images = async function(only = 1, from = false, poster = false) {
+    // Get the first images of a folder/compressed
+    this.images = async function (only = 1, from = false, poster = false) {
 
-		if(poster) this.updateConfig({specialFiles: true});
-		if(!this.alreadyRead) await this.read();
+        if (poster) this.updateConfig({specialFiles: true});
+        if (!this.alreadyRead) await this.read();
 
-		if(poster)
-		{
-			let _poster = await this.poster();
-			if(!_poster) _poster = this._poster(this.files, false, true);
+        if (poster) {
+            let _poster = await this.poster();
+            if (!_poster) _poster = this._poster(this.files, false, true);
 
-			if(_poster) return _poster;
-		}
+            if (_poster) return _poster;
+        }
 
-		let images = (await this._images(only, this.files, from, false, poster)).images;
+        let images = (await this._images(only, this.files, from, false, poster)).images;
 
-		for(let i = 0, len = images.length; i < len; i++)
-		{
-			images[i] = {name: p.basename(images[i]), path: images[i], folder: false, compressed: false};
-		}
+        for (let i = 0, len = images.length; i < len; i++) {
+            images[i] = {name: p.basename(images[i]), path: images[i], folder: false, compressed: false};
+        }
 
-		if(this.config.sha)
-			images = this.sha(images);
+        if (this.config.sha)
+            images = this.sha(images);
 
-		return (Math.abs(only) == 1) ? (images[0] || false) : images;
-	}
+        return (Math.abs(only) == 1) ? (images[0] || false) : images;
+    }
 
-	this._poster = function(files, path = false, inside = false) {
+    this._poster = function (files, path = false, inside = false) {
 
-		path = path || this.path;
+        path = path || this.path;
 
-		let name = p.parse(path).name;
+        let name = p.parse(path).name;
 
-		let regex = new RegExp('^(?:[\-\s0-9+])?(?:'+pregQuote(name)+'(?:[_-]?(?:cover|default|folder|series|poster|thumbnail))?'+(inside ? '|cover|default|folder|series|poster|thumbnail' : '')+')(?:[\-\s0-9+])?\.[a-z0-9]+$');
-		let poster = false;
+        let regex = new RegExp('^(?:[\-\s0-9+])?(?:' + pregQuote(name) + '(?:[_-]?(?:cover|default|folder|series|poster|thumbnail))?' + (inside ? '|cover|default|folder|series|poster|thumbnail' : '') + ')(?:[\-\s0-9+])?\.[a-z0-9]+$');
+        let poster = false;
 
-		let len = files.length
-		for(let i = 0; i < len; i++)
-		{
-			let file = files[i];
+        let len = files.length
+        for (let i = 0; i < len; i++) {
+            let file = files[i];
 
-			if(!file.folder && !file.compressed && (regex.test(file.name) || file.poster))
-			{
-				if(!poster && inArray(mime.getType(file.path), compatibleMime))
-				{
-					file.sha = sha1(file.path);
-					poster = file;
-				}
-				else if(inArray(app.extname(file.path), compatibleSpecialExtensions)) // prioritize tbn poster
-				{
-					file.sha = sha1(file.path);
-					poster = file;
+            if (!file.folder && !file.compressed && (regex.test(file.name) || file.poster)) {
+                if (!poster && inArray(mime.getType(file.path), compatibleMime)) {
+                    file.sha = sha1(file.path);
+                    poster = file;
+                } else if (inArray(app.extname(file.path), compatibleSpecialExtensions)) // prioritize tbn poster
+                {
+                    file.sha = sha1(file.path);
+                    poster = file;
 
-					break;
-				}
-			}
-		}
+                    break;
+                }
+            }
+        }
 
-		if(!poster && inside && len && (config.useTheFirstImageAsPosterInFolders || config.useTheFirstImageAsPosterInFiles))
-		{
-			let _isCompressed = isCompressed(path);
+        if (!poster && inside && len && (config.useTheFirstImageAsPosterInFolders || config.useTheFirstImageAsPosterInFiles)) {
+            let _isCompressed = isCompressed(path);
 
-			if((!_isCompressed && config.useTheFirstImageAsPosterInFolders) || (_isCompressed && config.useTheFirstImageAsPosterInFiles))
-			{
-				for(let i = 0; i < len; i++)
-				{
-					let file = files[i];
+            if ((!_isCompressed && config.useTheFirstImageAsPosterInFolders) || (_isCompressed && config.useTheFirstImageAsPosterInFiles)) {
+                for (let i = 0; i < len; i++) {
+                    let file = files[i];
 
-					if(!file.folder && !file.compressed)
-					{
-						if(inArray(mime.getType(file.path), compatibleMime))
-						{
-							file.sha = sha1(file.path);
-							file.fromFirstImageAsPoster = sha1(file.path);
-							poster = file;
+                    if (!file.folder && !file.compressed) {
+                        if (inArray(mime.getType(file.path), compatibleMime)) {
+                            file.sha = sha1(file.path);
+                            file.fromFirstImageAsPoster = sha1(file.path);
+                            poster = file;
 
-							break;
-						}
-					}
-					else
-					{
-						break;
-					}
-				}
-			}
-		}
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
 
-		return poster;
-	}
+        return poster;
+    }
 
-	this.poster = async function() {
+    this.poster = async function () {
 
-		let dirname = p.dirname(this.path);
+        let dirname = p.dirname(this.path);
 
-		try
-		{
-			let file = fileManager.file(dirname);
-			file.updateConfig({...this.config, ...{fastRead: true, specialFiles: true, sha: false}});
-			let files = await file.read();
+        try {
+            let file = fileManager.file(dirname);
+            file.updateConfig({...this.config, ...{fastRead: true, specialFiles: true, sha: false}});
+            let files = await file.read();
 
-			let poster = this._poster(files);
+            let poster = this._poster(files);
 
-			return poster;
-		}
-		catch(error)
-		{
-			console.error(error);
+            return poster;
+        } catch (error) {
+            console.error(error);
 
-			if(!macosMAS)
-				throw new Error(error);
-		}
+            if (!macosMAS)
+                throw new Error(error);
+        }
 
-		return false;
-	}
+        return false;
+    }
 
-	this.setPosterFromMetadata = function(files, poster) {
+    this.setPosterFromMetadata = function (files, poster) {
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			if(files[i].name == poster)
-			{
-				files[i].poster = true;
+        for (let i = 0, len = files.length; i < len; i++) {
+            if (files[i].name == poster) {
+                files[i].poster = true;
 
-				break;
-			}
-		}
+                break;
+            }
+        }
 
-		return files;
+        return files;
 
-	}
+    }
 
-	this.saveCompressedMetadata = function(path, metadata) {
+    this.saveCompressedMetadata = function (path, metadata) {
 
-		if(metadata.title || metadata.author)
-		{
-			storage.setVar('compressedMetadata', path, {
-				title: metadata.title,
-				author: metadata.author,
-			});
-		}
+        if (metadata.title || metadata.author) {
+            storage.setVar('compressedMetadata', path, {
+                title: metadata.title,
+                author: metadata.author,
+            });
+        }
 
-	}
+    }
 
-	this.sha = function(files) {
+    this.sha = function (files) {
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			files[i].sha = sha1(files[i].path);
-		}
+        for (let i = 0, len = files.length; i < len; i++) {
+            files[i].sha = sha1(files[i].path);
+        }
 
-		return files;
-	}
+        return files;
+    }
 
-	this.only = function(files) {
+    this.only = function (files) {
 
-		let only = this.config.only;
-		let _files = [];
+        let only = this.config.only;
+        let _files = [];
 
-		if(only >= 0)
-		{
-			let len = files.length;
-			let limit = only;
-			if(limit > len) limit = len;
+        if (only >= 0) {
+            let len = files.length;
+            let limit = only;
+            if (limit > len) limit = len;
 
-			for(let i = 0; i < limit; i++)
-			{
-				_files.push(files[i]);
-			}
-		}
-		else
-		{
-			let len = files.length;
-			let limit = len + only;
-			if(limit < 0) limit = 0;
+            for (let i = 0; i < limit; i++) {
+                _files.push(files[i]);
+            }
+        } else {
+            let len = files.length;
+            let limit = len + only;
+            if (limit < 0) limit = 0;
 
-			for(let i = len - 1; i >= limit; i--)
-			{
-				_files.push(files[i]);
-			}
-		}
+            for (let i = len - 1; i >= limit; i--) {
+                _files.push(files[i]);
+            }
+        }
 
-		return _files;
-	}
+        return _files;
+    }
 
-	this._readFromFilesList = function(segments, files) {
+    this._readFromFilesList = function (segments, files) {
 
-		let segment = segments.shift();
-		let remaining = segments.length;
+        let segment = segments.shift();
+        let remaining = segments.length;
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			let file = files[i];
+        for (let i = 0, len = files.length; i < len; i++) {
+            let file = files[i];
 
-			if(file.name == segment)
-			{
-				if(remaining == 0)
-					return file.files;
-				else
-					return this._readFromFilesList(segments, file.files);
-			}
-		}
+            if (file.name == segment) {
+                if (remaining == 0)
+                    return file.files;
+                else
+                    return this._readFromFilesList(segments, file.files);
+            }
+        }
 
-	}
+    }
 
-	this.readFromFilesList = function(files, path, lastCompressed) {
+    this.readFromFilesList = function (files, path, lastCompressed) {
 
-		let segments = splitPath(removePathPart(path, lastCompressed));
+        let segments = splitPath(removePathPart(path, lastCompressed));
 
-		return this._readFromFilesList(segments, files);
+        return this._readFromFilesList(segments, files);
 
-	}
+    }
 
-	// Makes the files available, extracting them from the respective compressed files if necessary
-	this.makeAvailable = async function(files, callbackWhenFileAvailable = false, forceCheck = false, fromThumbnailsGeneration = false) {
+    // Makes the files available, extracting them from the respective compressed files if necessary
+    this.makeAvailable = async function (files, callbackWhenFileAvailable = false, forceCheck = false, fromThumbnailsGeneration = false) {
 
-		let filesToDecompress = false, filesToDecompressNum = 0;
+        let filesToDecompress = false, filesToDecompressNum = 0;
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			let file = files[i];
+        for (let i = 0, len = files.length; i < len; i++) {
+            let file = files[i];
 
-			let _path = realPath(file.path, -1, this.config.prefixes);
+            let _path = realPath(file.path, -1, this.config.prefixes);
 
-			if((!forceCheck || _path === file.path) && fs.existsSync(_path))
-			{
-				if(callbackWhenFileAvailable) callbackWhenFileAvailable(file);
-			}
-			else
-			{
-				if(!filesToDecompress) filesToDecompress = {};
-			
-				let compressedFile = lastCompressedFile(file.path);
+            if ((!forceCheck || _path === file.path) && fs.existsSync(_path)) {
+                if (callbackWhenFileAvailable) callbackWhenFileAvailable(file);
+            } else {
+                if (!filesToDecompress) filesToDecompress = {};
 
-				if(!compressedFile && isServer(file.path))
-				{
-					compressedFile = serverClient.getTypeAdress(file.path);
+                let compressedFile = lastCompressedFile(file.path);
 
-					if(!filesToDecompress[compressedFile]) filesToDecompress[compressedFile] = [];
-					filesToDecompress[compressedFile].push(file.path);
-				}
-				else
-				{
-					if(!filesToDecompress[compressedFile]) filesToDecompress[compressedFile] = [];
-					filesToDecompress[compressedFile].push(removePathPart(file.path, compressedFile));
-				}
+                if (!compressedFile && isServer(file.path)) {
+                    compressedFile = serverClient.getTypeAdress(file.path);
 
-				filesToDecompressNum++;
-			}
+                    if (!filesToDecompress[compressedFile]) filesToDecompress[compressedFile] = [];
+                    filesToDecompress[compressedFile].push(file.path);
+                } else {
+                    if (!filesToDecompress[compressedFile]) filesToDecompress[compressedFile] = [];
+                    filesToDecompress[compressedFile].push(removePathPart(file.path, compressedFile));
+                }
 
-			if(_path !== file.path) // If it is different it is because it is not a compressed file
-				this.setTmpUsage(_path);
-		}
+                filesToDecompressNum++;
+            }
 
-		if(filesToDecompress)
-		{
-			let _this = this;
+            if (_path !== file.path) // If it is different it is because it is not a compressed file
+                this.setTmpUsage(_path);
+        }
 
-			for(let compressedFile in filesToDecompress)
-			{
-				if(isServer(compressedFile))
-				{
-					if(containsCompressed(compressedFile, 0, false))
-					{
-						let firstCompressed = firstCompressedFile(compressedFile, 0, false);
+        if (filesToDecompress) {
+            let _this = this;
 
-						// Download file to tmp
-						let file = await serverClient.download(compressedFile, {only: [firstCompressed]});
+            for (let compressedFile in filesToDecompress) {
+                if (isServer(compressedFile)) {
+                    if (containsCompressed(compressedFile, 0, false)) {
+                        let firstCompressed = firstCompressedFile(compressedFile, 0, false);
 
-						let compressed = this.openCompressed(compressedFile);
+                        // Download file to tmp
+                        let file = await serverClient.download(compressedFile, {only: [firstCompressed]});
 
-						await this.extractIfInsideAnotherCompressed(compressedFile);
+                        let compressed = this.openCompressed(compressedFile);
 
-						await compressed.extract({only: filesToDecompress[compressedFile]}, function(file) {
+                        await this.extractIfInsideAnotherCompressed(compressedFile);
 
-							if(_this.config.sha) file.sha = sha1(file.path);
-							if(callbackWhenFileAvailable) callbackWhenFileAvailable(file);
+                        await compressed.extract({only: filesToDecompress[compressedFile]}, function (file) {
 
-						});
+                            if (_this.config.sha) file.sha = sha1(file.path);
+                            if (callbackWhenFileAvailable) callbackWhenFileAvailable(file);
 
-						if(fromThumbnailsGeneration || _this.config.fromThumbnailsGeneration)
-							downloadedCompressedFile(firstCompressed);
-					}
-					else
-					{
-						await serverClient.download(compressedFile, {only: filesToDecompress[compressedFile]}, function(file) {
+                        });
 
-							if(_this.config.sha) file.sha = sha1(file.path);
-							if(callbackWhenFileAvailable) callbackWhenFileAvailable(file);
+                        if (fromThumbnailsGeneration || _this.config.fromThumbnailsGeneration)
+                            downloadedCompressedFile(firstCompressed);
+                    } else {
+                        await serverClient.download(compressedFile, {only: filesToDecompress[compressedFile]}, function (file) {
 
-						});
-					}
-				}
-				else
-				{
-					let compressed = this.openCompressed(compressedFile);
+                            if (_this.config.sha) file.sha = sha1(file.path);
+                            if (callbackWhenFileAvailable) callbackWhenFileAvailable(file);
 
-					await this.extractIfInsideAnotherCompressed(compressedFile);
+                        });
+                    }
+                } else {
+                    let compressed = this.openCompressed(compressedFile);
 
-					await compressed.extract({only: filesToDecompress[compressedFile]}, function(file) {
+                    await this.extractIfInsideAnotherCompressed(compressedFile);
 
-						if(_this.config.sha) file.sha = sha1(file.path);
-						if(callbackWhenFileAvailable) callbackWhenFileAvailable(file);
+                    await compressed.extract({only: filesToDecompress[compressedFile]}, function (file) {
 
-					});
-				}
-			}
-		}
+                        if (_this.config.sha) file.sha = sha1(file.path);
+                        if (callbackWhenFileAvailable) callbackWhenFileAvailable(file);
 
-		this.saveTmpUsage();
+                    });
+                }
+            }
+        }
 
-		return filesToDecompressNum;
-	}
+        this.saveTmpUsage();
 
-	this.tmpUsage = [];
+        return filesToDecompressNum;
+    }
 
-	this.setTmpUsage = function(path) {
+    this.tmpUsage = [];
 
-		this.tmpUsage.push(path);
+    this.setTmpUsage = function (path) {
 
-	}
+        this.tmpUsage.push(path);
 
-	this.saveTmpUsage = function() {
+    }
 
-		let len = this.tmpUsage.length;
+    this.saveTmpUsage = function () {
 
-		if(len === 0) return;
+        let len = this.tmpUsage.length;
 
-		let time = app.time();
-		let tmpUsage = storage.get('tmpUsage');
+        if (len === 0) return;
 
-		for(let i = 0; i < len; i++)
-		{
-			let path = this.tmpUsage[i];
+        let time = app.time();
+        let tmpUsage = storage.get('tmpUsage');
 
-			if(!tmpUsage[path]) tmpUsage[path] = {};
-			tmpUsage[path].lastAccess = time;
-		}
+        for (let i = 0; i < len; i++) {
+            let path = this.tmpUsage[i];
 
-		storage.setThrottle('tmpUsage', tmpUsage);
-		this.tmpUsage = [];
+            if (!tmpUsage[path]) tmpUsage[path] = {};
+            tmpUsage[path].lastAccess = time;
+        }
 
-	}
+        storage.setThrottle('tmpUsage', tmpUsage);
+        this.tmpUsage = [];
 
-	this.macosScopedResources = [];
+    }
 
-	this.macosStartAccessingSecurityScopedResource = function(path) {
+    this.macosScopedResources = [];
 
-		if(macosMAS)
-		{
-			let securityScopedBookmarks = storage.get('securityScopedBookmarks');
-			let segments = splitPath(path);
+    this.macosStartAccessingSecurityScopedResource = function (path) {
 
-			if(!segments[0])
-				segments[0] = p.sep;
+        if (macosMAS) {
+            let securityScopedBookmarks = storage.get('securityScopedBookmarks');
+            let segments = splitPath(path);
 
-			for(let i = 1, len = segments.length; i < len; i++)
-			{
-				let _path = p.join(...segments);
-				let bookmark = securityScopedBookmarks[_path] || false;
+            if (!segments[0])
+                segments[0] = p.sep;
 
-				if(bookmark)
-				{
-					try
-					{
-						this.macosScopedResources.push(electronRemote.app.startAccessingSecurityScopedResource(bookmark));
-						break;
-					}
-					catch {}
-				}
+            for (let i = 1, len = segments.length; i < len; i++) {
+                let _path = p.join(...segments);
+                let bookmark = securityScopedBookmarks[_path] || false;
 
-				segments.pop();
-			}
-		}
+                if (bookmark) {
+                    try {
+                        this.macosScopedResources.push(electronRemote.app.startAccessingSecurityScopedResource(bookmark));
+                        break;
+                    } catch {
+                    }
+                }
 
-	}
+                segments.pop();
+            }
+        }
 
-	this.destroy = function() {
+    }
 
-		for(let path in this.compressedOpened)
-		{
-			this.compressedOpened[path].compressed.destroy();
-			delete this.compressedOpened[path];
-		}
+    this.destroy = function () {
 
-		// Stop accessing security scoped resources
-		for(let i = 0, len = this.macosScopedResources.length; i < len; i++)
-		{
-			this.macosScopedResources[i]();
-		}
+        for (let path in this.compressedOpened) {
+            this.compressedOpened[path].compressed.destroy();
+            delete this.compressedOpened[path];
+        }
 
-		this.macosScopedResources = [];
+        // Stop accessing security scoped resources
+        for (let i = 0, len = this.macosScopedResources.length; i < len; i++) {
+            this.macosScopedResources[i]();
+        }
 
-	};
+        this.macosScopedResources = [];
+
+    };
 }
 
 
 // Compressed files
-var fileCompressed = function(path, _realPath = false, forceType = false, prefixes = false) {
-
-	this.path = path;
-	this.realPath = _realPath || realPath(path, -1);
-	this.forceType = forceType;
-	this.prefixes = prefixes;
-	this.virtualPath = this.path;
-	this.sha = sha1(p.normalize(path));
-
-	if(prefixes)
-	{
-		let extension = fileExtension(path);
-
-		if(extension)
-		{
-			for(let ext in prefixes)
-			{
-				if(inArray(extension, compressedExtensions[ext]))
-				{
-					this.sha = prefixes[ext]+'-'+this.sha;
-
-					break;
-				}
-			}
-		}
-	}
-
-	this.cacheFile = 'compressed-files-'+this.sha+'.json';
-	this.tmp = p.join(tempFolder, this.sha);
-	this.tmpPartialExtraction = p.join(this.tmp, this.sha+'-opencomic-partial-extraction.txt');
-	this.tmpIsVector = p.join(this.tmp, this.sha+'-opencomic-is-vector.txt');
-
-	this.contentRightIndex = template.contentRightIndex();
-
-	this.fullExtracted = false;
-
-	this.files = false;
-	this.filesStatus = {};
-	this.metadata = false;
-
-	this.config = this._config = {
-		// only: false,
-		cache: true,
-		width: window.devicePixelRatio * 150, // Vector width
-		height: false, // Vector height
-		force: false, // Forces the extraction even if the file exists
-	};
-
-	this._features = {
-		zip: {
-			read: true,
-			single: true,
-			vector: false,
-			canvas: false,
-			html: false,
-			ebook: false,
-			progress: true,
-		},
-		'7z': {
-			read: true,
-			single: true,
-			vector: false,
-			canvas: false,
-			html: false,
-			ebook: false,
-			progress: true,
-		},
-		rar: {
-			read: true,
-			single: true,
-			vector: false,
-			canvas: false,
-			html: false,
-			ebook: false,
-			progress: true,
-		},
-		tar: {
-			read: true,
-			single: true,
-			vector: false,
-			canvas: false,
-			html: false,
-			ebook: false,
-			progress: false,
-		},
-		pdf: {
-			read: true,
-			single: true,
-			vector: true,
-			canvas: true,
-			html: true,
-			ebook: false,
-			progress: true,
-		},
-		epub: {
-			read: true,
-			single: true,
-			vector: true,
-			canvas: false,
-			html: true,
-			ebook: true,
-			progress: true,
-		},
-	};
+var fileCompressed = function (path, _realPath = false, forceType = false, prefixes = false) {
+
+    this.path = path;
+    this.realPath = _realPath || realPath(path, -1);
+    this.forceType = forceType;
+    this.prefixes = prefixes;
+    this.virtualPath = this.path;
+    this.sha = sha1(p.normalize(path));
+
+    if (prefixes) {
+        let extension = fileExtension(path);
+
+        if (extension) {
+            for (let ext in prefixes) {
+                if (inArray(extension, compressedExtensions[ext])) {
+                    this.sha = prefixes[ext] + '-' + this.sha;
+
+                    break;
+                }
+            }
+        }
+    }
+
+    this.cacheFile = 'compressed-files-' + this.sha + '.json';
+    this.tmp = p.join(tempFolder, this.sha);
+    this.tmpPartialExtraction = p.join(this.tmp, this.sha + '-opencomic-partial-extraction.txt');
+    this.tmpIsVector = p.join(this.tmp, this.sha + '-opencomic-is-vector.txt');
+
+    this.contentRightIndex = template.contentRightIndex();
+
+    this.fullExtracted = false;
+
+    this.files = false;
+    this.filesStatus = {};
+    this.metadata = false;
+
+    this.config = this._config = {
+        // only: false,
+        cache: true,
+        width: window.devicePixelRatio * 150, // Vector width
+        height: false, // Vector height
+        force: false, // Forces the extraction even if the file exists
+    };
+
+    this._features = {
+        zip: {
+            read: true,
+            single: true,
+            vector: false,
+            canvas: false,
+            html: false,
+            ebook: false,
+            progress: true,
+        },
+        '7z': {
+            read: true,
+            single: true,
+            vector: false,
+            canvas: false,
+            html: false,
+            ebook: false,
+            progress: true,
+        },
+        rar: {
+            read: true,
+            single: true,
+            vector: false,
+            canvas: false,
+            html: false,
+            ebook: false,
+            progress: true,
+        },
+        tar: {
+            read: true,
+            single: true,
+            vector: false,
+            canvas: false,
+            html: false,
+            ebook: false,
+            progress: false,
+        },
+        pdf: {
+            read: true,
+            single: true,
+            vector: true,
+            canvas: true,
+            html: true,
+            ebook: false,
+            progress: true,
+        },
+        epub: {
+            read: true,
+            single: true,
+            vector: true,
+            canvas: false,
+            html: true,
+            ebook: true,
+            progress: true,
+        },
+    };
+
+    this.features = false;
 
-	this.features = false;
+    this.updateConfigOnly = function (_only) {
 
-	this.updateConfigOnly = function(_only) {
+        if (!_only)
+            return this.config.only = this.config._only = _only;
 
-		if(!_only)
-			return this.config.only = this.config._only = _only;
+        let only = {};
 
-		let only = {};
+        for (let i = 0, len = _only.length; i < len; i++) {
+            only[_only[i]] = true;
+        }
 
-		for(let i = 0, len = _only.length; i < len; i++)
-		{
-			only[_only[i]] = true;
-		}
+        this.config._only = _only;
+        return this.config.only = only;
 
-		this.config._only = _only;
-		return this.config.only = only;
+    }
 
-	}
+    this.updateConfig = function (config) {
 
-	this.updateConfig = function(config) {
+        for (let key in this._config) {
+            if (typeof config[key] === 'undefined')
+                config[key] = this._config[key];
+        }
 
-		for(let key in this._config)
-		{
-			if(typeof config[key] === 'undefined')
-				config[key] = this._config[key];
-		}
+        this.config = config;
 
-		this.config = config;
+        if (config.only)
+            this.updateConfigOnly(config.only);
 
-		if(config.only)
-			this.updateConfigOnly(config.only);
+    }
 
-	}
+    this.getFeatures = function (force = false) {
 
-	this.getFeatures = function(force = false) {
+        if (this.features && !force) return this.features;
 
-		if(this.features && !force) return this.features;
+        force = force || this.forceType;
 
-		force = force || this.forceType;
+        if (!force) {
+            let ext = fileExtension(this.path);
 
-		if(!force)
-		{
-			let ext = fileExtension(this.path);
+            if (inArray(ext, compressedExtensions.zip))
+                force = 'zip';
+            else if (inArray(ext, compressedExtensions['7z']))
+                force = '7z';
+            else if (inArray(ext, compressedExtensions.rar))
+                force = 'rar';
+            else if (inArray(ext, compressedExtensions.tar))
+                force = 'tar';
+            else if (inArray(ext, compressedExtensions.pdf))
+                force = 'pdf';
+            else if (inArray(ext, compressedExtensions.epub))
+                force = 'epub';
+        }
 
-			if(inArray(ext, compressedExtensions.zip))
-				force = 'zip';
-			else if(inArray(ext, compressedExtensions['7z']))
-				force = '7z';
-			else if(inArray(ext, compressedExtensions.rar))
-				force = 'rar';
-			else if(inArray(ext, compressedExtensions.tar))
-				force = 'tar';
-			else if(inArray(ext, compressedExtensions.pdf))
-				force = 'pdf';
-			else if(inArray(ext, compressedExtensions.epub))
-				force = 'epub';
-		}
+        this.features = this._features[force];
+        this.features.ext = force;
+        this.features[force] = true;
 
-		this.features = this._features[force];
-		this.features.ext = force;
-		this.features[force] = true;
+        return this.features;
 
-		return this.features;
+    }
 
-	}
+    this.setTmpUsage = function () {
 
-	this.setTmpUsage = function() {
+        if (this.path !== this.realPath) {
+            let time = app.time();
+            let tmpUsage = storage.get('tmpUsage');
 
-		if(this.path !== this.realPath)
-		{
-			let time = app.time();
-			let tmpUsage = storage.get('tmpUsage');
+            if (!tmpUsage[this.realPath]) tmpUsage[this.realPath] = {};
+            tmpUsage[this.realPath].lastAccess = time;
 
-			if(!tmpUsage[this.realPath]) tmpUsage[this.realPath] = {};
-			tmpUsage[this.realPath].lastAccess = time;
+            storage.setThrottle('tmpUsage', tmpUsage);
+        }
 
-			storage.setThrottle('tmpUsage', tmpUsage);
-		}
+    }
 
-	}
+    this.saveErrorToCache = function (error) {
 
-	this.saveErrorToCache = function(error) {
+        let json = cache.readJson(this.cacheFile);
 
-		let json = cache.readJson(this.cacheFile);
+        if (json) {
+            json.error = (error.detail || error.message);
+            cache.writeJson(this.cacheFile, json);
+        }
 
-		if(json)
-		{
-			json.error = (error.detail || error.message);
-			cache.writeJson(this.cacheFile, json);
-		}
+    }
 
-	}
+    this.detectFileTypeFromBinary = async function () {
 
-	this.detectFileTypeFromBinary = async function() {
+        if (fileType === false) fileType = require('file-type').fromFile;
 
-		if(fileType === false) fileType = require('file-type').fromFile;
+        let type = await fileType(this.realPath);
 
-		let type = await fileType(this.realPath);
+        if (inArray(type.ext, compressedExtensions.all) && type.ext != 'epub')
+            return type.ext;
 
-		if(inArray(type.ext, compressedExtensions.all) && type.ext != 'epub')
-			return type.ext;
+        return this.features.ext;
 
-		return this.features.ext;
+    }
 
-	}
+    this.read = async function (config = {}) {
 
-	this.read = async function(config = {}) {
+        this.updateConfig(config);
+        this.getFeatures();
 
-		this.updateConfig(config);
-		this.getFeatures();
+        if (this.config.cache && this.files)
+            return this.files;
 
-		if(this.config.cache && this.files)
-			return this.files;
+        return this.readCurrent();
+    }
 
-		return this.readCurrent();
-	}
+    this.readCurrent = function () {
 
-	this.readCurrent = function() {
+        this.setTmpUsage();
 
-		this.setTmpUsage();
+        console.log('readCompressed... ' + this.path);
 
-		console.log('readCompressed... '+this.path);
+        if (this.features.zip)
+            return this.read7z(); // return this.readZip();
+        else if (this.features['7z'])
+            return this.read7z();
+        else if (this.features.rar)
+            return this.readRar();
+        else if (this.features.tar)
+            return this.readTar();
+        else if (this.features.pdf)
+            return this.readPdf();
+        else if (this.features.epub)
+            return this.readEpub();
 
-		if(this.features.zip)
-			return this.read7z(); // return this.readZip();
-		else if(this.features['7z'])
-			return this.read7z();
-		else if(this.features.rar)
-			return this.readRar();
-		else if(this.features.tar)
-			return this.readTar();
-		else if(this.features.pdf)
-			return this.readPdf();
-		else if(this.features.epub)
-			return this.readEpub();
+        return false;
+    }
 
-		return false;
-	}
+    this.readMetadata = async function (config = {}) {
 
-	this.readMetadata = async function(config = {}) {
+        this.updateConfig(config);
+        this.getFeatures();
 
-		this.updateConfig(config);
-		this.getFeatures();
+        if (this.config.cache && this.metadata)
+            return this.metadata;
 
-		if(this.config.cache && this.metadata)
-			return this.metadata;
+        return this.readCurrentMetadata();
+    }
 
-		return this.readCurrentMetadata();
-	}
+    this.readCurrentMetadata = function () {
 
-	this.readCurrentMetadata = function() {
+        if (this.features.zip || this.features['7z'] || this.features.rar || this.features.tar)
+            return this.readCompressedMetadata();
+        else if (this.features.pdf)
+            return this.readPdfMetadata();
+        else if (this.features.epub)
+            return this.readEpubMetadata();
 
-		if(this.features.zip || this.features['7z'] || this.features.rar || this.features.tar)
-			return this.readCompressedMetadata();
-		else if(this.features.pdf)
-			return this.readPdfMetadata();
-		else if(this.features.epub)
-			return this.readEpubMetadata();
+        return {};
+    }
 
-		return {};
-	}
+    this.readCompressedMetadata = async function () {
 
-	this.readCompressedMetadata = async function() {
+        let files = await this.read();
 
-		let files = await this.read();
+        let comicInfoFile = false;
 
-		let comicInfoFile = false;
+        for (let i = 0, len = files.length; i < len; i++) {
+            if (files[i].name == 'ComicInfo.xml') {
+                comicInfoFile = files[i];
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			if(files[i].name == 'ComicInfo.xml')
-			{
-				comicInfoFile = files[i];
+                break;
+            }
+        }
 
-				break;
-			}
-		}
+        if (comicInfoFile) {
+            if (fastXmlParser === false) {
+                fastXmlParser = require('fast-xml-parser').XMLParser;
+                fastXmlParser = new fastXmlParser({ignoreAttributes: false});
+            }
 
-		if(comicInfoFile)
-		{
-			if(fastXmlParser === false)
-			{
-				fastXmlParser = require('fast-xml-parser').XMLParser;
-				fastXmlParser = new fastXmlParser({ignoreAttributes: false});
-			}
+            let only = this.config.only;
+            await this.extract({only: [comicInfoFile.name]});
+            this.updateConfig({only: only});
 
-			let only = this.config.only;
-			await this.extract({only: [comicInfoFile.name]});
-			this.updateConfig({only: only});
+            let xml = await fsp.readFile(realPath(comicInfoFile.path, -1));
+            let metadata = fastXmlParser.parse(xml);
 
-			let xml = await fsp.readFile(realPath(comicInfoFile.path, -1));
-			let metadata = fastXmlParser.parse(xml);
+            let comicInfo = metadata.ComicInfo || {};
+            let poster = false;
 
-			let comicInfo = metadata.ComicInfo || {};
-			let poster = false;
+            if (comicInfo.Pages && comicInfo.Pages.Page) {
+                let _poster = false;
 
-			if(comicInfo.Pages && comicInfo.Pages.Page)
-			{
-				let _poster = false;
+                for (let i = 0, len = comicInfo.Pages.Page.length; i < len; i++) {
+                    let page = comicInfo.Pages.Page[i];
 
-				for(let i = 0, len = comicInfo.Pages.Page.length; i < len; i++)
-				{
-					let page = comicInfo.Pages.Page[i];
+                    if (page['@_Type'] == 'FrontCover') {
+                        _poster = +page['@_Image'];
 
-					if(page['@_Type'] == 'FrontCover')
-					{
-						_poster = +page['@_Image'];
+                        break;
+                    } else if (page['@_Type'] == 'InnerCover') {
+                        _poster = +page['@_Image'];
+                    }
+                }
 
-						break;
-					}
-					else if(page['@_Type'] == 'InnerCover')
-					{
-						_poster = +page['@_Image'];
-					}
-				}
+                if (_poster !== false) {
+                    let index = 0;
 
-				if(_poster !== false)
-				{
-					let index = 0;
+                    for (let i = 0, len = files.length; i < len; i++) {
+                        let file = files[i];
 
-					for(let i = 0, len = files.length; i < len; i++)
-					{
-						let file = files[i];
+                        if (!file.folder && !file.compressed && inArray(mime.getType(file.path), compatibleMime)) {
+                            if (index === _poster) {
+                                poster = file.name;
+                                file.poster = true;
 
-						if(!file.folder && !file.compressed && inArray(mime.getType(file.path), compatibleMime))
-						{
-							if(index === _poster)
-							{
-								poster = file.name;
-								file.poster = true;
+                                break;
+                            }
 
-								break;
-							}
+                            index++;
+                        }
+                    }
 
-							index++;
-						}
-					}
+                }
+            }
 
-				}
-			}
+            for (let key in comicInfo) {
+                if (comicInfo[key] instanceof Object && comicInfo[key]['#text']) {
+                    comicInfo[key] = comicInfo[key]['#text'];
+                }
+            }
 
-			for(let key in comicInfo)
-			{
-				if(comicInfo[key] instanceof Object && comicInfo[key]['#text'])
-				{
-					comicInfo[key] = comicInfo[key]['#text'];
-				}
-			}
+            // https://anansi-project.github.io/docs/category/schemas
+            return {
+                title: comicInfo.Title || '',
+                series: comicInfo.Series || '',
+                localizedSeries: comicInfo.LocalizedSeries || '',
+                seriesGroup: comicInfo.SeriesGroup || '',
 
-			// https://anansi-project.github.io/docs/category/schemas
-			return {
-				title: comicInfo.Title || '',
-				series: comicInfo.Series || '',
-				localizedSeries: comicInfo.LocalizedSeries || '',
-				seriesGroup: comicInfo.SeriesGroup || '',
+                poster: poster,
 
-				poster: poster,
+                bookNumber: comicInfo.Number || 0,
+                bookTotal: comicInfo.Count || 0,
+                volume: comicInfo.Volume || 0,
 
-				bookNumber: comicInfo.Number || 0,
-				bookTotal: comicInfo.Count || 0,
-				volume: comicInfo.Volume || 0,
+                storyArc: comicInfo.StoryArc || '',
+                storyArcNumber: comicInfo.StoryArcNumber || 0,
 
-				storyArc: comicInfo.StoryArc || '',
-				storyArcNumber: comicInfo.StoryArcNumber || 0,
+                alternateSeries: comicInfo.AlternateSeries || 0,
+                alternateBookNumber: comicInfo.AlternateNumber || 0,
+                alternateBookTotal: comicInfo.AlternateCount || 0,
 
-				alternateSeries: comicInfo.AlternateSeries || 0,
-				alternateBookNumber: comicInfo.AlternateNumber || 0,
-				alternateBookTotal: comicInfo.AlternateCount || 0,
+                manga: (comicInfo.Manga == 'Yes' || comicInfo.Manga == 'YesAndRightToLeft') ? true : (comicInfo.Manga == 'No' ? false : null),
 
-				manga: (comicInfo.Manga == 'Yes' || comicInfo.Manga == 'YesAndRightToLeft') ? true : (comicInfo.Manga == 'No' ? false : null),
+                author: comicInfo.Writer || '',
+                writer: comicInfo.Writer || '',
+                penciller: comicInfo.Penciller || '',
+                inker: comicInfo.Inker || '',
+                colorist: comicInfo.Colorist || '',
+                letterer: comicInfo.Letterer || '',
+                coverArtist: comicInfo.CoverArtist || '',
+                editor: comicInfo.Editor || '',
+                translator: comicInfo.Translator || '',
+                publisher: comicInfo.Publisher || '',
+                imprint: comicInfo.Imprint || '',
 
-				author: comicInfo.Writer || '',
-				writer: comicInfo.Writer || '',
-				penciller: comicInfo.Penciller || '',
-				inker: comicInfo.Inker || '',
-				colorist: comicInfo.Colorist || '',
-				letterer: comicInfo.Letterer || '',
-				coverArtist: comicInfo.CoverArtist || '',
-				editor: comicInfo.Editor || '',
-				translator: comicInfo.Translator || '',
-				publisher: comicInfo.Publisher || '',
-				imprint: comicInfo.Imprint || '',
+                ageRating: comicInfo.AgeRating || '',
+                genre: comicInfo.Genre || '',
+                tags: comicInfo.Tags || '',
+                web: comicInfo.Web || '',
+                description: comicInfo.Summary || '',
 
-				ageRating: comicInfo.AgeRating || '',
-				genre: comicInfo.Genre || '',
-				tags: comicInfo.Tags || '',
-				web: comicInfo.Web || '',
-				description: comicInfo.Summary || '',
+                characters: comicInfo.Characters || '',
+                teams: comicInfo.Teams || '',
+                locations: comicInfo.Locations || '',
+                mainCharacterOrTeam: comicInfo.MainCharacterOrTeam || '',
 
-				characters: comicInfo.Characters || '',
-				teams: comicInfo.Teams || '',
-				locations: comicInfo.Locations || '',
-				mainCharacterOrTeam: comicInfo.MainCharacterOrTeam || '',
+                releaseDate: (comicInfo.Year && comicInfo.Month && comicInfo.Day) ? comicInfo.Year + '-' + comicInfo.Month + '-' + comicInfo.Day : '',
+                year: comicInfo.Year || 0,
+                month: comicInfo.Month || 0,
+                day: comicInfo.Day || 0,
 
-				releaseDate: (comicInfo.Year && comicInfo.Month && comicInfo.Day) ? comicInfo.Year+'-'+comicInfo.Month+'-'+comicInfo.Day : '',
-				year: comicInfo.Year || 0,
-				month: comicInfo.Month || 0,
-				day: comicInfo.Day || 0,
+                language: comicInfo.LanguageISO || '',
+                format: comicInfo.Format || '',
+                scanInformation: comicInfo.ScanInformation || '',
+                notes: comicInfo.Notes || '',
+                GTIN: comicInfo.GTIN || '',
 
-				language: comicInfo.LanguageISO || '',
-				format: comicInfo.Format || '',
-				scanInformation: comicInfo.ScanInformation || '',
-				notes: comicInfo.Notes || '',
-				GTIN: comicInfo.GTIN || '',
+                metadata: metadata,
+            };
+        }
 
-				metadata: metadata,
-			};
-		}
+        return {};
 
-		return {};
+    }
 
-	}
+    this.readIfTypeFromBinaryIsDifferent = async function (error = false) {
 
-	this.readIfTypeFromBinaryIsDifferent = async function(error = false) {
+        let _this = this;
 
-		let _this = this;
+        return new Promise(async function (resolve, reject) {
 
-		return new Promise(async function(resolve, reject) {
+            let type = await _this.detectFileTypeFromBinary();
 
-			let type = await _this.detectFileTypeFromBinary();
+            if (type && type !== _this.features.ext) {
+                _this.getFeatures(type);
+                resolve(_this.readCurrent());
+            } else {
+                reject(error);
+            }
 
-			if(type && type !== _this.features.ext)
-			{
-				_this.getFeatures(type);
-				resolve(_this.readCurrent());
-			}
-			else
-			{
-				reject(error);
-			}
+        });
 
-		});
+    }
 
-	}
+    this.callbackWhenFileExtracted = false;
 
-	this.callbackWhenFileExtracted = false;
+    this.extract = async function (config = {}, callbackWhenFileExtracted = false) {
 
-	this.extract = async function(config = {}, callbackWhenFileExtracted = false) {
+        this.updateConfig(config);
+        this.getFeatures();
 
-		this.updateConfig(config);
-		this.getFeatures();
+        this.callbackWhenFileExtracted = callbackWhenFileExtracted;
 
-		this.callbackWhenFileExtracted = callbackWhenFileExtracted;
+        if (!fs.existsSync(this.tmp)) {
+            fs.mkdirSync(this.tmp);
 
-		if(!fs.existsSync(this.tmp))
-		{
-			fs.mkdirSync(this.tmp);
+            if (this.config.only)
+                fs.writeFileSync(this.tmpPartialExtraction, '');
+        } else if (!this.config.only) {
+            if (fs.existsSync(this.tmpPartialExtraction))
+                fs.unlinkSync(this.tmpPartialExtraction);
+        }
 
-			if(this.config.only)
-				fs.writeFileSync(this.tmpPartialExtraction, ''); 
-		}
-		else if(!this.config.only)
-		{
-			if(fs.existsSync(this.tmpPartialExtraction))
-				fs.unlinkSync(this.tmpPartialExtraction);
-		}
+        if (this.features.vector && !fs.existsSync(this.tmpIsVector))
+            fs.writeFileSync(this.tmpIsVector, window.devicePixelRatio.toString());
 
-		if(this.features.vector && !fs.existsSync(this.tmpIsVector))
-			fs.writeFileSync(this.tmpIsVector, window.devicePixelRatio.toString());
+        if (!this.config.force) {
+            let only = await this.checkIfAlreadyExtracted();
 
-		if(!this.config.force)
-		{
-			let only = await this.checkIfAlreadyExtracted();
+            if (only === null)
+                return true;
+            else
+                this.updateConfigOnly(only);
+        }
 
-			if(only === null)
-				return true;
-			else
-				this.updateConfigOnly(only);
-		}
+        if (this.features.progress)
+            this.setProgress(0);
 
-		if(this.features.progress)
-			this.setProgress(0);
+        return this.extractCurrent();
+    }
 
-		return this.extractCurrent();
-	}
+    this.extractCurrent = function () {
 
-	this.extractCurrent = function() {
+        this.setTmpUsage();
 
-		this.setTmpUsage();
+        console.log('extractCompressed...' + (this.config._only ? ' (' + this.config._only.length + ' files)' : '') + ' ' + this.path);
 
-		console.log('extractCompressed...'+(this.config._only ? ' ('+this.config._only.length+' files)' : '')+' '+this.path);
+        if (this.features.zip)
+            return this.extract7z(); // return this.extractZip();
+        else if (this.features['7z'])
+            return this.extract7z();
+        else if (this.features.rar)
+            return this.extractRar();
+        else if (this.features.tar)
+            return this.extractTar();
+        else if (this.features.pdf)
+            return this.extractPdf();
+        else if (this.features.epub)
+            return this.extractEpub();
 
-		if(this.features.zip)
-			return this.extract7z(); // return this.extractZip();
-		else if(this.features['7z'])
-			return this.extract7z();
-		else if(this.features.rar)
-			return this.extractRar();
-		else if(this.features.tar)
-			return this.extractTar();
-		else if(this.features.pdf)
-			return this.extractPdf();
-		else if(this.features.epub)
-			return this.extractEpub();
+        return false;
+    }
 
-		return false;
-	}
+    this.extractIfTypeFromBinaryIsDifferent = async function (error = false) {
 
-	this.extractIfTypeFromBinaryIsDifferent = async function(error = false) {
+        let _this = this;
 
-		let _this = this;
+        return new Promise(async function (resolve, reject) {
 
-		return new Promise(async function(resolve, reject) {
+            let type = await _this.detectFileTypeFromBinary();
 
-			let type = await _this.detectFileTypeFromBinary();
+            if (type && type !== _this.features.ext) {
+                _this.getFeatures(type);
+                resolve(_this.extractCurrent());
+            } else {
+                reject(error);
+            }
 
-			if(type && type !== _this.features.ext)
-			{
-				_this.getFeatures(type);
-				resolve(_this.extractCurrent());
-			}
-			else
-			{
-				reject(error);
-			}
+        });
 
-		});
+    }
 
-	}
+    this.checkIfAlreadyExtracted = async function () {
 
-	this.checkIfAlreadyExtracted = async function() {
+        if (this.config.only) {
+            let only = [];
 
-		if(this.config.only)
-		{
-			let only = [];
+            for (let path in this.config.only) {
+                if (!fs.existsSync(p.join(this.tmp, path)))
+                    only.push(path);
+                else
+                    this.whenExtractFile(p.join(this.path, path));
+            }
 
-			for(let path in this.config.only)
-			{
-				if(!fs.existsSync(p.join(this.tmp, path)))
-					only.push(path);
-				else
-					this.whenExtractFile(p.join(this.path, path));
-			}
+            if (!only.length)
+                return null;
+            else
+                return only;
+        } else {
+            try {
+                let file = fileManager.file(this.path);
+                let files = await file.read({cacheOnly: true});
+                files = this.filesToOnedimension(files);
 
-			if(!only.length)
-				return null;
-			else
-				return only;
-		}
-		else
-		{
-			try
-			{
-				let file = fileManager.file(this.path);
-				let files = await file.read({cacheOnly: true});
-				files = this.filesToOnedimension(files);
+                let only = [];
+                let someIsExtracted = false;
 
-				let only = [];
-				let someIsExtracted = false;
+                for (let i = 0, len = files.length; i < len; i++) {
+                    let file = files[i];
 
-				for(let i = 0, len = files.length; i < len; i++)
-				{
-					let file = files[i];
+                    if (fs.existsSync(p.join(this.tmp, file.pathInCompressed))) {
+                        this.whenExtractFile(p.join(this.path, file.pathInCompressed));
+                        someIsExtracted = true;
+                    } else {
+                        only.push(file.pathInCompressed);
+                    }
+                }
 
-					if(fs.existsSync(p.join(this.tmp, file.pathInCompressed)))
-					{
-						this.whenExtractFile(p.join(this.path, file.pathInCompressed));
-						someIsExtracted = true;
-					}
-					else
-					{
-						only.push(file.pathInCompressed);
-					}
-				}
+                if (!only.length)
+                    return null;
+                else if (someIsExtracted)
+                    return only;
+                else
+                    return false;
+            } catch (error) {
+                console.error(error);
 
-				if(!only.length)
-					return null;
-				else if(someIsExtracted)
-					return only;
-				else
-					return false;
-			}
-			catch(error)
-			{
-				console.error(error);
+                return false;
+            }
+        }
 
-				return false;
-			}
-		}
+    }
 
-	}
+    this.renderCanvas = async function (file, canvas, config = {}) {
 
-	this.renderCanvas = async function(file, canvas, config = {}) {
+        this.updateConfig(config);
+        this.getFeatures();
 
-		this.updateConfig(config);
-		this.getFeatures();
+        if (this.features.pdf)
+            return this.renderCanvasPdf(file, canvas);
 
-		if(this.features.pdf)
-			return this.renderCanvasPdf(file, canvas);
+    }
 
-	}
+    this.ebookPages = async function (config = {}) {
 
-	this.ebookPages = async function(config = {}) {
+        this.getFeatures();
 
-		this.getFeatures();
+        if (this.features.ebook)
+            return this.ebookPagesEpub(config);
 
-		if(this.features.ebook)
-			return this.ebookPagesEpub(config);
+    }
 
-	}
+    this.ebook = async function (config = {}) {
 
-	this.ebook = async function(config = {}) {
+        this.updateConfig(config);
+        this.getFeatures();
 
-		this.updateConfig(config);
-		this.getFeatures();
+        if (this.features.ebook)
+            return this.ebookEpub();
 
-		if(this.features.ebook)
-			return this.ebookEpub();
+    }
 
-	}
+    this.setFileStatus = function (path, data = {}) {
 
-	this.setFileStatus = function(path, data = {}) {
+        if (!this.filesStatus[path]) {
+            this.filesStatus[path] = data;
+        } else {
+            for (let key in data) {
+                if (key != 'extracted' || data[key])
+                    this.filesStatus[path][key] = data[key];
+            }
+        }
 
-		if(!this.filesStatus[path])
-		{
-			this.filesStatus[path] = data;
-		}
-		else
-		{
-			for(let key in data)
-			{
-				if(key != 'extracted' || data[key])
-					this.filesStatus[path][key] = data[key];
-			}
-		}
+    }
 
-	}
+    this.getFileStatus = function (file) {
 
-	this.getFileStatus = function(file) {
+        return this.filesStatus[file] || false;
 
-		return this.filesStatus[file] || false;
+    }
 
-	}
+    this.removeTmp = function (name) {
 
-	this.removeTmp = function(name) {
+        return removePathPart(name, this.tmp);
 
-		return removePathPart(name, this.tmp);
+    }
 
-	}
+    this.isCompressed = function (name) {
 
-	this.isCompressed = function(name) {
+        let ext = fileExtension(name);
 
-		let ext = fileExtension(name);
+        if (inArray(ext, compressedExtensions.all))
+            return true;
 
-		if(inArray(ext, compressedExtensions.all))
-			return true;
+        return false;
+    }
 
-		return false;
-	}
+    this.isFolder = function (path) {
 
-	this.isFolder = function(path) {
+        if (fs.statSync(realPath(path, -1, this.prefixes)).isDirectory())
+            return true;
 
-		if(fs.statSync(realPath(path, -1, this.prefixes)).isDirectory())
-			return true;
+        return false;
+    }
 
-		return false;
-	}
+    this.folderPathRegExp = false;
 
-	this.folderPathRegExp = false;
+    this.folderPath = function (path) {
 
-	this.folderPath = function(path) {
+        if (!this.folderPathRegExp)
+            this.folderPathRegExp = new RegExp(pregQuote(p.sep) + '[^' + pregQuote(p.sep) + ']+$');
 
-		if(!this.folderPathRegExp)
-			this.folderPathRegExp = new RegExp(pregQuote(p.sep)+'[^'+pregQuote(p.sep)+']+$');
+        return path.replace(this.folderPathRegExp, '');
 
-		return path.replace(this.folderPathRegExp, '');
+    }
 
-	}
+    this._filesToMultidimension = function (files, dimensions, from = false) {
 
-	this._filesToMultidimension = function(files, dimensions, from = false) {
+        let _files = [];
 
-		let _files = [];
+        for (let key in dimensions) {
+            let value = dimensions[key];
 
-		for(let key in dimensions)
-		{
-			let value = dimensions[key];
+            if (typeof value === 'number') {
+                let file = files[value];
 
-			if(typeof value === 'number')
-			{
-				let file = files[value];
+                let data = {
+                    name: key,
+                    path: file.path,
+                    folder: file.folder ? true : false,
+                    compressed: this.isCompressed(file.name),
+                };
 
-				let data = {
-					name: key,
-					path: file.path,
-					folder: file.folder ? true : false,
-					compressed: this.isCompressed(file.name),
-				};
+                if (file.folder)
+                    data.files = [];
 
-				if(file.folder)
-					data.files = [];
+                _files.push(data);
+            } else {
+                let _name = from ? p.join(from, key) : key;
 
-				_files.push(data);
-			}
-			else
-			{
-				let _name = from ? p.join(from, key) : key;
+                _files.push({
+                    name: key,
+                    path: p.join(this.path, _name),
+                    folder: true,
+                    files: this._filesToMultidimension(files, value, _name),
+                });
+            }
+        }
 
-				_files.push({
-					name: key,
-					path: p.join(this.path, _name),
-					folder: true,
-					files: this._filesToMultidimension(files, value, _name),
-				});
-			}
-		}
+        return _files;
+    }
 
-		return _files;
-	}
+    this.filesToMultidimension = function (files) {
 
-	this.filesToMultidimension = function(files) {
+        files.sort(function (a, b) {
 
-		files.sort(function(a, b) {
+            if (a.name === b.name) // This is technically not possible
+                return 0;
 
-			if(a.name === b.name) // This is technically not possible
-				return 0;
+            return a.name > b.name ? 1 : -1;
 
-			return a.name > b.name ? 1 : -1;
+        });
 
-		});
+        let dimensions = {};
 
-		let dimensions = {};
+        let firstFile = files[0];
 
-		let firstFile = files[0];
+        for (let i = 0, len = files.length; i < len; i++) {
+            let file = files[i];
+            let fileIndex = i;
+            let segments = splitPath(file.name);
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			let file = files[i];
-			let fileIndex = i;
-			let segments = splitPath(file.name);
+            let dimension = dimensions;
 
-			let dimension = dimensions;
+            for (let i = 0, len = segments.length; i < len; i++) {
+                let segment = segments[i];
 
-			for(let i = 0, len = segments.length; i < len; i++)
-			{
-				let segment = segments[i];
+                if (segment) {
+                    if (!dimension[segment] || typeof dimension[segment] === 'number') dimension[segment] = (i + 1 == len) ? fileIndex : {};
+                    dimension = dimension[segment];
+                }
+            }
+        }
 
-				if(segment)
-				{
-					if(!dimension[segment] || typeof dimension[segment] === 'number') dimension[segment] = (i + 1 == len) ? fileIndex : {};
-					dimension = dimension[segment];
-				}
-			}
-		}
+        let _files = this._filesToMultidimension(files, dimensions);
 
-		let _files = this._filesToMultidimension(files, dimensions);
+        return _files;
+    }
 
-		return _files;
-	}
+    this.filesToOnedimension = function (files, _files = [], parentPath = '') {
 
-	this.filesToOnedimension = function(files, _files = [], parentPath = '') {
+        for (let i = 0, len = files.length; i < len; i++) {
+            let file = files[i];
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			let file = files[i];
+            let _parentPath = p.join(parentPath, file.name);
 
-			let _parentPath = p.join(parentPath, file.name);
+            _files.push({
+                name: file.name,
+                path: file.path,
+                pathInCompressed: _parentPath,
+                folder: file.folder,
+                compressed: file.compressed
+            })
 
-			_files.push({name: file.name, path: file.path, pathInCompressed: _parentPath, folder: file.folder, compressed: file.compressed})
+            if (file.files)
+                _files = this.filesToOnedimension(file.files, _files, _parentPath);
+        }
 
-			if(file.files)
-				_files = this.filesToOnedimension(file.files, _files, _parentPath);
-		}
+        return _files;
+    }
 
-		return _files;
-	}
+    this.whenExtractFile = function (path) {
 
-	this.whenExtractFile = function(path) {
+        if (this.callbackWhenFileExtracted) {
+            let name = p.basename(path);
 
-		if(this.callbackWhenFileExtracted)
-		{
-			let name = p.basename(path);
+            let file = {
+                name: name,
+                path: path,
+                folder: this.isFolder(path),
+                compressed: this.isCompressed(name),
+            };
 
-			let file = {
-				name: name,
-				path: path,
-				folder: this.isFolder(path),
-				compressed: this.isCompressed(name),
-			};
+            this.callbackWhenFileExtracted(file);
+        }
 
-			this.callbackWhenFileExtracted(file);
-		}
+    };
 
-	};
+    this.progressIndex = 0;
+    this.progressPrev = false;
 
-	this.progressIndex = 0;
-	this.progressPrev = false;
+    this.progress = {};
 
-	this.progress = {};
+    this.setProgress = function (progress, index = false) {
 
-	this.setProgress = function(progress, index = false) {
+        index = index !== false ? index : this.contentRightIndex;
 
-		index = index !== false ? index : this.contentRightIndex;
+        if (!progress)
+            this.progressPrev = false;
 
-		if(!progress)
-			this.progressPrev = false;
+        if (this.progress && this.progress.multiply)
+            progress = progress * this.progress.multiply;
 
-		if(this.progress && this.progress.multiply)
-			progress = progress * this.progress.multiply;
+        let svg = document.querySelector('.content-right .content-right-' + index + ' .loading.loading96 svg');
 
-		let svg = document.querySelector('.content-right .content-right-'+index+' .loading.loading96 svg');
+        if (svg) {
+            svg.style.animation = 'none';
+            svg.style.transform = 'rotate(-90deg)';
+        }
 
-		if(svg)
-		{
-			svg.style.animation = 'none';
-			svg.style.transform = 'rotate(-90deg)';
-		}
+        let circle = document.querySelector('.content-right .content-right-' + index + ' .loading.loading96 circle');
 
-		let circle = document.querySelector('.content-right .content-right-'+index+' .loading.loading96 circle');
+        if (circle) {
+            let now = Date.now();
 
-		if(circle)
-		{
-			let now = Date.now();
+            let speed = this.progressPrev ? Math.round(now - this.progressPrev) : 0;
 
-			let speed = this.progressPrev ? Math.round(now - this.progressPrev) : 0;
+            this.progressPrev = now;
 
-			this.progressPrev = now;
+            circle.style.animation = 'none';
+            circle.style.transition = speed + 'ms stroke-dasharray';
+            circle.style.strokeDashoffset = 225;
+            circle.style.strokeDasharray = 226 + ((422 - 226) * progress);
+        }
 
-			circle.style.animation = 'none';
-			circle.style.transition = speed+'ms stroke-dasharray';
-			circle.style.strokeDashoffset = 225;
-			circle.style.strokeDasharray = 226 + ((422 - 226) * progress);
-		}
+    }
 
-	}
+    this.fixCorruptedName = function (name, pos = 0) {
 
-	this.fixCorruptedName = function(name, pos = 0) {
+        if (/�/.test(name)) {
+            let ext = p.extname(name);
+            return pos + ' - ' + sha1(name) + (ext ? '.' + ext : '');
+        }
 
-		if(/�/.test(name))
-		{
-			let ext = p.extname(name);
-			return pos+' - '+sha1(name)+(ext ? '.'+ext : '');
-		}
+        return name;
 
-		return name;
+    }
 
-	}
+    // ZIP
+    this.zip = false;
 
-	// ZIP
-	this.zip = false;
+    this.openZip = async function () {
 
-	this.openZip = async function() {
+        // Not support this cache
+        // if(this.zip) return this.zip;
 
-		// Not support this cache
-		// if(this.zip) return this.zip;
+        if (unzip === false) unzip = require('unzipper');
 
-		if(unzip === false) unzip = require('unzipper');
+        this.macosStartAccessingSecurityScopedResource(this.realPath);
+        this.zip = await unzip.Open.file(this.realPath);
 
-		this.macosStartAccessingSecurityScopedResource(this.realPath);
-		this.zip = await unzip.Open.file(this.realPath);
+        return this.zip;
 
-		return this.zip;
+    }
 
-	}
+    this.checkZipError = async function (extract = false) {
 
-	this.checkZipError = async function(extract = false) {
+        let _this = this;
 
-		let _this = this;
+        return new Promise(function (resolve, reject) {
 
-		return new Promise(function(resolve, reject) {
+            fs.createReadStream(_this.realPath).pipe(
+                unzip.Extract({path: _this.tmp}).on('close', reject).on('error', async function (error) {
 
-			fs.createReadStream(_this.realPath).pipe(
-				unzip.Extract({path: _this.tmp}).on('close', reject).on('error', async function(error){
+                    if (/0xafbc7a37/.test(error.message)) // 7zip file
+                    {
+                        _this.getFeatures('7z');
 
-					if(/0xafbc7a37/.test(error.message)) // 7zip file
-					{
-						_this.getFeatures('7z');
+                        resolve(extract ? _this.extract7z() : _this.read7z());
+                    } else if (/0x21726152/.test(error.message)) // rar file
+                    {
+                        _this.getFeatures('rar');
 
-						resolve(extract ? _this.extract7z() : _this.read7z());
-					}
-					else if(/0x21726152/.test(error.message)) // rar file
-					{
-						_this.getFeatures('rar');
+                        resolve(extract ? _this.extractRar() : _this.readRar());
+                    } else {
+                        resolve(extract ? _this.extractIfTypeFromBinaryIsDifferent(error) : _this.readIfTypeFromBinaryIsDifferent(error));
+                    }
 
-						resolve(extract ? _this.extractRar() : _this.readRar());
-					}
-					else
-					{
-						resolve(extract ? _this.extractIfTypeFromBinaryIsDifferent(error) : _this.readIfTypeFromBinaryIsDifferent(error));
-					}
-					
-				})
-			);
+                })
+            );
 
-		});
+        });
 
-	}
+    }
 
-	this.readZip = async function(callback = false) {
+    this.readZip = async function (callback = false) {
 
-		let files = [];
+        let files = [];
 
-		console.time('readZip: '+this.path);
+        console.time('readZip: ' + this.path);
 
-		try
-		{
-			let zip = await this.openZip();
+        try {
+            let zip = await this.openZip();
 
-			for(let i = 0, len = zip.files.length; i < len; i++)
-			{
-				let entry = zip.files[i];
-				let name = p.normalize(this.fixCorruptedName(entry.path, i));
+            for (let i = 0, len = zip.files.length; i < len; i++) {
+                let entry = zip.files[i];
+                let name = p.normalize(this.fixCorruptedName(entry.path, i));
 
-				files.push({name: name, path: p.join(this.path, name), folder: (entry.type === 'Directory' ? true : false)});
-				this.setFileStatus(name, {extracted: false});
-			}
+                files.push({
+                    name: name,
+                    path: p.join(this.path, name),
+                    folder: (entry.type === 'Directory' ? true : false)
+                });
+                this.setFileStatus(name, {extracted: false});
+            }
 
-			files = this.filesToMultidimension(files);
-		}
-		catch(error)
-		{
-			files = await this.checkZipError();
-		}
+            files = this.filesToMultidimension(files);
+        } catch (error) {
+            files = await this.checkZipError();
+        }
 
-		console.timeEnd('readZip: '+this.path);
+        console.timeEnd('readZip: ' + this.path);
 
-		return this.files = files;
-		
-	}
+        return this.files = files;
 
-	this.extractZip = async function(callback = false) {
+    }
 
-		console.time('extractZip: '+this.path);
+    this.extractZip = async function (callback = false) {
 
-		try
-		{
-			let zip = await this.openZip();
+        console.time('extractZip: ' + this.path);
 
-			this.progressIndex = 1;
+        try {
+            let zip = await this.openZip();
 
-			let _this = this;
-			let only = this.config.only;
+            this.progressIndex = 1;
 
-			for(let i = 0, len = zip.files.length; i < len; i++)
-			{
-				let entry = zip.files[i];
-				let name = p.normalize(this.fixCorruptedName(entry.path, i));
+            let _this = this;
+            let only = this.config.only;
 
-				let extract = !only || only[name] ? true : false;
+            for (let i = 0, len = zip.files.length; i < len; i++) {
+                let entry = zip.files[i];
+                let name = p.normalize(this.fixCorruptedName(entry.path, i));
 
-				if(extract)
-				{
-					let path = p.join(this.tmp, name);
-					let virtualPath = p.join(this.path, name);
+                let extract = !only || only[name] ? true : false;
 
-					if(entry.type === 'Directory')
-					{
-						if(!fs.existsSync(path))
-							fs.mkdirSync(path);
-					}
-					else
-					{
-						let folderPath = this.folderPath(path);
+                if (extract) {
+                    let path = p.join(this.tmp, name);
+                    let virtualPath = p.join(this.path, name);
 
-						if(!fs.existsSync(folderPath))
-							fs.mkdirSync(folderPath, {recursive: true});
+                    if (entry.type === 'Directory') {
+                        if (!fs.existsSync(path))
+                            fs.mkdirSync(path);
+                    } else {
+                        let folderPath = this.folderPath(path);
 
-						this.setFileStatus(name, {extracted: true});
+                        if (!fs.existsSync(folderPath))
+                            fs.mkdirSync(folderPath, {recursive: true});
 
-						await new Promise(function(resolve, reject) {
-							entry.stream().pipe(fs.createWriteStream(path)).on('error', reject).on('finish', function() {
+                        this.setFileStatus(name, {extracted: true});
 
-								_this.setProgress(_this.progressIndex++ / len);
-								_this.whenExtractFile(virtualPath);
+                        await new Promise(function (resolve, reject) {
+                            entry.stream().pipe(fs.createWriteStream(path)).on('error', reject).on('finish', function () {
 
-								resolve();
-							});
-						});
-					}
-				}
-			}
-		}
-		catch(error)
-		{
-			await this.checkZipError(true);
-		}
+                                _this.setProgress(_this.progressIndex++ / len);
+                                _this.whenExtractFile(virtualPath);
 
-		this.setProgress(1);
+                                resolve();
+                            });
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            await this.checkZipError(true);
+        }
 
-		console.timeEnd('extractZip: '+this.path);
+        this.setProgress(1);
 
-		return;
-	}
+        console.timeEnd('extractZip: ' + this.path);
 
+        return;
+    }
 
 
+    // 7z
+    this._7z = false;
 
-	// 7z
-	this._7z = false;
+    this.open7z = async function (extract = false) {
 
-	this.open7z = async function(extract = false) {
+        // Not support this cache
+        // if(this._7z) return this._7z;
 
-		// Not support this cache
-		// if(this._7z) return this._7z;
+        if (un7z === false) un7z = require('node-7z');
+        if (bin7z === false) bin7z = asarToAsarUnpacked(require('7zip-bin').path7za);
 
-		if(un7z === false) un7z = require('node-7z');
-		if(bin7z === false) bin7z = asarToAsarUnpacked(require('7zip-bin').path7za);
+        this.macosStartAccessingSecurityScopedResource(this.realPath);
 
-		this.macosStartAccessingSecurityScopedResource(this.realPath);
+        if (extract)
+            this._7z = un7z.extractFull(this.realPath, this.tmp, {
+                $bin: bin7z,
+                $progress: true,
+                charset: 'UTF-8',
+                listFileCharset: 'UTF-8'
+            });
+        else
+            this._7z = un7z.list(this.realPath, {$bin: bin7z, charset: 'UTF-8', listFileCharset: 'UTF-8'});
 
-		if(extract)
-			this._7z = un7z.extractFull(this.realPath, this.tmp, {$bin: bin7z, $progress: true, charset: 'UTF-8', listFileCharset: 'UTF-8'});
-		else
-			this._7z = un7z.list(this.realPath, {$bin: bin7z, charset: 'UTF-8', listFileCharset: 'UTF-8'});
+        return this._7z;
 
-		return this._7z;
+    }
 
-	}
+    this.read7z = async function (callback = false) {
 
-	this.read7z = async function(callback = false) {
+        let files = [];
 
-		let files = [];
+        console.time('read7z: ' + this.path);
+        let _this = this;
 
-		console.time('read7z: '+this.path);
-		let _this = this;
+        let _7z = await this.open7z();
+        let readSome = false;
 
-		let _7z = await this.open7z();
-		let readSome = false;
+        return new Promise(function (resolve, reject) {
 
-		return new Promise(function(resolve, reject) {
+            _7z.on('data', function (data) {
 
-			_7z.on('data', function(data) {
+                let name = _this.removeTmp(p.normalize(data.file));
 
-				let name = _this.removeTmp(p.normalize(data.file));
+                files.push({name: name, path: p.join(_this.path, name)});
+                _this.setFileStatus(name, {extracted: false});
 
-				files.push({name: name, path: p.join(_this.path, name)});
-				_this.setFileStatus(name, {extracted: false});
+                readSome = true;
 
-				readSome = true;
+            }).on('end', function (data) {
 
-			}).on('end', function(data) {
+                console.timeEnd('read7z: ' + _this.path);
 
-				console.timeEnd('read7z: '+_this.path);
+                _this.files = _this.filesToMultidimension(files);
+                resolve(_this.files);
 
-				_this.files = _this.filesToMultidimension(files);
-				resolve(_this.files);
+            }).on('error', function (error) {
 
-			}).on('error', function(error){
+                if (readSome) {
+                    /*_this.files = _this.filesToMultidimension(files);
+                    resolve(_this.files);*/
 
-				if(readSome)
-				{
-					/*_this.files = _this.filesToMultidimension(files);
-					resolve(_this.files);*/
+                    //_this.saveErrorToCache(error);
+                    dom.compressedError(error, false, sha1(_this.path));
+                } else {
+                    resolve(_this.readIfTypeFromBinaryIsDifferent(error));
+                }
 
-					//_this.saveErrorToCache(error);
-					dom.compressedError(error, false, sha1(_this.path));
-				}
-				else
-				{
-					resolve(_this.readIfTypeFromBinaryIsDifferent(error));
-				}
+            });
 
-			});
+        });
 
-		});
-		
-	}
+    }
 
-	this.extract7z = async function(callback = false) {
+    this.extract7z = async function (callback = false) {
 
-		console.time('extract7z: '+this.path);
+        console.time('extract7z: ' + this.path);
 
-		let only = this.config.only; 
-		let _this = this;
+        let only = this.config.only;
+        let _this = this;
 
-		let _7z = await this.open7z(true);
-		let extractedSome = false;
+        let _7z = await this.open7z(true);
+        let extractedSome = false;
 
-		return new Promise(function(resolve, reject) {
+        return new Promise(function (resolve, reject) {
 
-			_7z.on('data', function(data) {
+            _7z.on('data', function (data) {
 
-				let extract = data.status == 'extracted' ? true : false;
+                let extract = data.status == 'extracted' ? true : false;
 
-				if(extract)
-				{
-					let name = _this.removeTmp(p.normalize(data.file));
+                if (extract) {
+                    let name = _this.removeTmp(p.normalize(data.file));
 
-					_this.setFileStatus(name, {extracted: extract});
-					_this.whenExtractFile(p.join(_this.path, name));
+                    _this.setFileStatus(name, {extracted: extract});
+                    _this.whenExtractFile(p.join(_this.path, name));
 
-					extractedSome = true;
-				}
+                    extractedSome = true;
+                }
 
-			}).on('progress', function(progress) {
+            }).on('progress', function (progress) {
 
-  				_this.setProgress(progress.percent / 100);
+                _this.setProgress(progress.percent / 100);
 
-			}).on('end', function(data) {
+            }).on('end', function (data) {
 
-				console.timeEnd('extract7z: '+_this.path);
+                console.timeEnd('extract7z: ' + _this.path);
 
-				_this.setProgress(1);
+                _this.setProgress(1);
 
-				console.log('extract7z end: '+_this.path);
+                console.log('extract7z end: ' + _this.path);
 
-				resolve();
+                resolve();
 
-			}).on('error', function(error) {
+            }).on('error', function (error) {
 
-				if(extractedSome)
-				{
-					/*_this.setProgress(1);
-					resolve();*/
+                if (extractedSome) {
+                    /*_this.setProgress(1);
+                    resolve();*/
 
-					_this.saveErrorToCache(error);
-					dom.compressedError(error, false, sha1(_this.path));
-				}
-				else
-				{
-					resolve(_this.extractIfTypeFromBinaryIsDifferent(error));
-				}
+                    _this.saveErrorToCache(error);
+                    dom.compressedError(error, false, sha1(_this.path));
+                } else {
+                    resolve(_this.extractIfTypeFromBinaryIsDifferent(error));
+                }
 
-			});
+            });
 
-		});
-		
-	}
+        });
 
+    }
 
-	// RAR
-	this.rar = false;
 
-	this.openRar = async function(extract = false, only = '') {
+    // RAR
+    this.rar = false;
 
-		if(this.rar) return this.rar;
+    this.openRar = async function (extract = false, only = '') {
 
-		if(unrar === false) unrar = require('node-unrar-js');
+        if (this.rar) return this.rar;
 
-		this.macosStartAccessingSecurityScopedResource(this.realPath);
-		let wasmBinary = fs.readFileSync(require.resolve('node-unrar-js/esm/js/unrar.wasm'));
-		this.rar = await unrar.createExtractorFromFile({wasmBinary: wasmBinary, filepath: this.realPath, targetPath: this.tmp});
+        if (unrar === false) unrar = require('node-unrar-js');
 
-		return this.rar;
+        this.macosStartAccessingSecurityScopedResource(this.realPath);
+        let wasmBinary = fs.readFileSync(require.resolve('node-unrar-js/esm/js/unrar.wasm'));
+        this.rar = await unrar.createExtractorFromFile({
+            wasmBinary: wasmBinary,
+            filepath: this.realPath,
+            targetPath: this.tmp
+        });
 
-	}
+        return this.rar;
 
-	this.readRar = async function(callback = false) {
+    }
 
-		let files = [];
+    this.readRar = async function (callback = false) {
 
-		console.time('readRar: '+this.path);
-		let _this = this;
+        let files = [];
 
-		try
-		{
-			let rar = await this.openRar();
-			let list = rar.getFileList();
-			list = [...list.fileHeaders];
+        console.time('readRar: ' + this.path);
+        let _this = this;
 
-			for(let i = 0, len = list.length; i < len; i++)
-			{
-				let file = list[i];
-				let name = _this.removeTmp(p.normalize(file.name));
+        try {
+            let rar = await this.openRar();
+            let list = rar.getFileList();
+            list = [...list.fileHeaders];
 
-				files.push({name: name, path: p.join(_this.path, name), folder: !!file.flags.directory});
-				_this.setFileStatus(name, {extracted: false});
-			}
+            for (let i = 0, len = list.length; i < len; i++) {
+                let file = list[i];
+                let name = _this.removeTmp(p.normalize(file.name));
 
-			console.timeEnd('readRar: '+_this.path);
+                files.push({name: name, path: p.join(_this.path, name), folder: !!file.flags.directory});
+                _this.setFileStatus(name, {extracted: false});
+            }
 
-			_this.files = _this.filesToMultidimension(files);
-			return _this.files;
-		}
-		catch(error)
-		{
-			return _this.readIfTypeFromBinaryIsDifferent(error);
-		}
-		
-	}
+            console.timeEnd('readRar: ' + _this.path);
 
-	this.extractRar = async function(callback = false) {
+            _this.files = _this.filesToMultidimension(files);
+            return _this.files;
+        } catch (error) {
+            return _this.readIfTypeFromBinaryIsDifferent(error);
+        }
 
-		console.time('extractRar: '+this.path);
+    }
 
-		this.progressIndex = 1;
+    this.extractRar = async function (callback = false) {
 
-		try
-		{
-			let rar = await this.openRar();
-			let regexp = new RegExp(pregQuote(p.sep, '/'), 'g');
+        console.time('extractRar: ' + this.path);
 
-			if(!this.config._only || !this.config._only.length)
-			{
-				let files = await this.read();
-				files = this.filesToOnedimension(files);
+        this.progressIndex = 1;
 
-				this.config._only = [];
+        try {
+            let rar = await this.openRar();
+            let regexp = new RegExp(pregQuote(p.sep, '/'), 'g');
 
-				for(let i = 0, len = files.length; i < len; i++)
-				{
-					this.config._only.push(files[i].pathInCompressed);
-				}
-			}
+            if (!this.config._only || !this.config._only.length) {
+                let files = await this.read();
+                files = this.filesToOnedimension(files);
 
-			for(let i = 0, len = this.config._only.length; i < len; i++)
-			{
-				let _name = this.config._only[i];
+                this.config._only = [];
 
-				let extracted = rar.extract({files: [_name.replace(regexp, '/')]});
-				extracted = [...extracted.files];
+                for (let i = 0, len = files.length; i < len; i++) {
+                    this.config._only.push(files[i].pathInCompressed);
+                }
+            }
 
-				await app.setImmediate();
+            for (let i = 0, len = this.config._only.length; i < len; i++) {
+                let _name = this.config._only[i];
 
-				let virtualPath = p.join(this.path, _name);
+                let extracted = rar.extract({files: [_name.replace(regexp, '/')]});
+                extracted = [...extracted.files];
 
-				this.setProgress(this.progressIndex++ / len);
-				this.setFileStatus(_name, {extracted: true});
-				this.whenExtractFile(virtualPath);
-			}
+                await app.setImmediate();
 
-			this.setProgress(1);
+                let virtualPath = p.join(this.path, _name);
 
-			console.timeEnd('extractRar: '+this.path);
+                this.setProgress(this.progressIndex++ / len);
+                this.setFileStatus(_name, {extracted: true});
+                this.whenExtractFile(virtualPath);
+            }
 
-			return;
-		}
-		catch(error)
-		{
-			return this.extractIfTypeFromBinaryIsDifferent(error);
-		}
-	}
+            this.setProgress(1);
 
+            console.timeEnd('extractRar: ' + this.path);
 
-	// TAR
-	this.tar = false;
+            return;
+        } catch (error) {
+            return this.extractIfTypeFromBinaryIsDifferent(error);
+        }
+    }
 
-	this.openTar = async function() {
 
-		// Not support this cache
-		// if(this.tar) return this.tar;
+    // TAR
+    this.tar = false;
 
-		if(untar === false) untar = require('tar-fs');
+    this.openTar = async function () {
 
-		this.macosStartAccessingSecurityScopedResource(this.realPath);
-		this.tar = fs.createReadStream(this.realPath);
+        // Not support this cache
+        // if(this.tar) return this.tar;
 
-		return this.tar;
+        if (untar === false) untar = require('tar-fs');
 
-	}
+        this.macosStartAccessingSecurityScopedResource(this.realPath);
+        this.tar = fs.createReadStream(this.realPath);
 
-	this.readTar = async function(callback = false) {
+        return this.tar;
 
-		let files = [];
+    }
 
-		let tar = await this.openTar();
-		let _this = this;
+    this.readTar = async function (callback = false) {
 
-		console.time('readTar: '+this.path);
+        let files = [];
 
-		return new Promise(function(resolve, reject) {
+        let tar = await this.openTar();
+        let _this = this;
 
-			tar.pipe(untar.extract(_this.tmp, {
-				ignore (name) {
+        console.time('readTar: ' + this.path);
 
-					name = _this.removeTmp(p.normalize(name));
+        return new Promise(function (resolve, reject) {
 
-					files.push({name: name, path: p.join(_this.path, name)});
-					_this.setFileStatus(name, {extracted: false});
+            tar.pipe(untar.extract(_this.tmp, {
+                ignore(name) {
 
-					return true;
-				}
-			})).on('finish', function() {
+                    name = _this.removeTmp(p.normalize(name));
 
-				console.timeEnd('readTar: '+_this.path);
+                    files.push({name: name, path: p.join(_this.path, name)});
+                    _this.setFileStatus(name, {extracted: false});
 
-				_this.files = _this.filesToMultidimension(files);
-				resolve(_this.files);
+                    return true;
+                }
+            })).on('finish', function () {
 
-			}).on('error', function(error) {
+                console.timeEnd('readTar: ' + _this.path);
 
-				resolve(_this.readIfTypeFromBinaryIsDifferent(error));
+                _this.files = _this.filesToMultidimension(files);
+                resolve(_this.files);
 
-			});
+            }).on('error', function (error) {
 
-		});
-		
-	}
+                resolve(_this.readIfTypeFromBinaryIsDifferent(error));
 
-	this.extractTar = async function(callback = false) {
+            });
 
-		let tar = await this.openTar();
+        });
 
-		let only = this.config.only; 
-		let _this = this;
+    }
 
-		console.time('extractTar: '+this.path);
+    this.extractTar = async function (callback = false) {
 
-		let files = [];
-		
-		return new Promise(function(resolve, reject) {
+        let tar = await this.openTar();
 
-			tar.pipe(untar.extract(_this.tmp, {
-				ignore (name) {
-					name = _this.removeTmp(p.normalize(name));
+        let only = this.config.only;
+        let _this = this;
 
-					let extract = !only || only[name] ? true : false;
-					_this.setFileStatus(name, {extracted: extract});
+        console.time('extractTar: ' + this.path);
 
-					if(extract)
-						files.push(p.join(_this.path, name));
+        let files = [];
 
-					return !extract;
-				}
-			})).on('finish', function() {
+        return new Promise(function (resolve, reject) {
 
-				console.timeEnd('extractTar: '+_this.path);
+            tar.pipe(untar.extract(_this.tmp, {
+                ignore(name) {
+                    name = _this.removeTmp(p.normalize(name));
 
-				for(let i = 0, len = files.length; i < len; i++)
-				{
-					_this.whenExtractFile(files[i]);
-				}
+                    let extract = !only || only[name] ? true : false;
+                    _this.setFileStatus(name, {extracted: extract});
 
-				resolve();
+                    if (extract)
+                        files.push(p.join(_this.path, name));
 
-			}).on('error', function(error) {
+                    return !extract;
+                }
+            })).on('finish', function () {
 
-				resolve(_this.extractIfTypeFromBinaryIsDifferent(error));
+                console.timeEnd('extractTar: ' + _this.path);
 
-			});
+                for (let i = 0, len = files.length; i < len; i++) {
+                    _this.whenExtractFile(files[i]);
+                }
 
-		});
+                resolve();
 
-	}
+            }).on('error', function (error) {
 
+                resolve(_this.extractIfTypeFromBinaryIsDifferent(error));
 
+            });
 
-	// PDF
-	this.pdf = false;
+        });
 
-	this.openPdf = async function() {
+    }
 
-		if(this.pdf) return this.pdf;
 
-		if(unpdf === false) await loadPdfjs();
+    // PDF
+    this.pdf = false;
 
-		this.macosStartAccessingSecurityScopedResource(this.realPath);
-		this.pdf = await unpdf.getDocument({url: encodeURIComponent(this.realPath).replace(/\%2F/g,'/').replace(/\%5C/g,'\\').replace(/\%3A/g, ':')/*, nativeImageDecoderSupport: 'none', disableFontFace: true*/}).promise;
+    this.openPdf = async function () {
 
-		return this.pdf;
+        if (this.pdf) return this.pdf;
 
-	}
+        if (unpdf === false) await loadPdfjs();
 
-	this.readPdf = async function() {
+        this.macosStartAccessingSecurityScopedResource(this.realPath);
+        this.pdf = await unpdf.getDocument({url: encodeURIComponent(this.realPath).replace(/\%2F/g, '/').replace(/\%5C/g, '\\').replace(/\%3A/g, ':')/*, nativeImageDecoderSupport: 'none', disableFontFace: true*/}).promise;
 
-		let _this = this;
+        return this.pdf;
 
-		let files = [];
+    }
 
-		console.time('readPdf: '+this.path);
+    this.readPdf = async function () {
 
-		let pdf = await this.openPdf();
-		let pages = pdf.numPages;
+        let _this = this;
 
-		for(let i = 1; i <= pages; i++)
-		{
-			let file = 'page-'+i+'.jpg';
+        let files = [];
 
-			let page = await pdf.getPage(i);
-			let viewport = page.getViewport({scale: 1});
+        console.time('readPdf: ' + this.path);
 
-			let size = {width: viewport.width, height: viewport.height};
+        let pdf = await this.openPdf();
+        let pages = pdf.numPages;
 
-			files.push({name: file, path: p.join(this.path, file), folder: false, compressed: false, size: size, page: i});
-			this.setFileStatus(file, {page: i, extracted: false, size: size});
-		}
+        for (let i = 1; i <= pages; i++) {
+            let file = 'page-' + i + '.jpg';
 
-		console.timeEnd('readPdf: '+this.path);
+            let page = await pdf.getPage(i);
+            let viewport = page.getViewport({scale: 1});
 
-		return this.files = files;
+            let size = {width: viewport.width, height: viewport.height};
 
-	}
+            files.push({
+                name: file,
+                path: p.join(this.path, file),
+                folder: false,
+                compressed: false,
+                size: size,
+                page: i
+            });
+            this.setFileStatus(file, {page: i, extracted: false, size: size});
+        }
 
-	this.readPdfMetadata = async function() {
+        console.timeEnd('readPdf: ' + this.path);
 
-		let pdf = await this.openPdf();
-		let metadata = await pdf.getMetadata();
+        return this.files = files;
 
-		let map = {};
+    }
 
-		if(metadata.metadata)
-		{
-			let _map = metadata.metadata.getAll();
-			map._map = _map;
+    this.readPdfMetadata = async function () {
 
-			for(let key in _map)
-			{
-				let item = _map;
+        let pdf = await this.openPdf();
+        let metadata = await pdf.getMetadata();
 
-				let _key = app.extract(/([^:]+)$/, key, 1);
-				if(!map[_key]) map[_key] = Array.isArray(_map[key]) ? _map[key].join(', ') : _map[key];
-			}
-		}
+        let map = {};
 
-		return {
-			title: metadata.info.Title || map.title || '',
+        if (metadata.metadata) {
+            let _map = metadata.metadata.getAll();
+            map._map = _map;
 
-			author: map.creator || metadata.info.Author || '',
-			publisher: map.publisher || '',
+            for (let key in _map) {
+                let item = _map;
 
-			description: app.stripTagsWithDOM(map.description || metadata.info.Description || metadata.info.Subject || ''),
+                let _key = app.extract(/([^:]+)$/, key, 1);
+                if (!map[_key]) map[_key] = Array.isArray(_map[key]) ? _map[key].join(', ') : _map[key];
+            }
+        }
 
-			language: map.language || metadata.info.Language || '',
+        return {
+            title: metadata.info.Title || map.title || '',
 
-			web: map.identifier ? app.extract(/^(?:url|uri):(.*)/iu, map.identifier) : '',
-			identifier: map.identifier,
+            author: map.creator || metadata.info.Author || '',
+            publisher: map.publisher || '',
 
-			releaseDate: map.metadatadate || '',
-			modifiedDate: map.modifydate || '',
+            description: app.stripTagsWithDOM(map.description || metadata.info.Description || metadata.info.Subject || ''),
 
-			creatorTool: map.creatortool || '',
+            language: map.language || metadata.info.Language || '',
 
-			metadata: {
-				info: metadata.info,
-				map: map,
-			},
-		};
+            web: map.identifier ? app.extract(/^(?:url|uri):(.*)/iu, map.identifier) : '',
+            identifier: map.identifier,
 
-	}
+            releaseDate: map.metadatadate || '',
+            modifiedDate: map.modifydate || '',
 
-	this.extractPdf = async function() {
+            creatorTool: map.creatortool || '',
 
-		console.time('extractPdf: '+this.path);
+            metadata: {
+                info: metadata.info,
+                map: map,
+            },
+        };
 
-		let pdf = await this.openPdf();
-		let pages = pdf.numPages;
+    }
 
-		let only = this.config.only; 
+    this.extractPdf = async function () {
 
-		let totalFiles = this.config._only ? this.config._only.length : pages;
-		let progressIndex = 1;
+        console.time('extractPdf: ' + this.path);
 
-		for(let i = 1; i <= pages; i++)
-		{
-			let file = 'page-'+i+'.jpg';
-			let path = p.join(this.tmp, file);
-			let virtualPath = p.join(this.path, file);
+        let pdf = await this.openPdf();
+        let pages = pdf.numPages;
 
-			let status = this.getFileStatus(file);
-			
-			if((!only || only[file]) && (this.config.force || !status.extracted || status.width !== this.config.width || !fs.existsSync(path)))
-			{
-				// Render page
-				let page = await pdf.getPage(i);
+        let only = this.config.only;
 
-				let width = (status?.size?.width || page.getViewport({scale: 1}).width);
+        let totalFiles = this.config._only ? this.config._only.length : pages;
+        let progressIndex = 1;
 
-				let scale = this.config.width / width;
-				let viewport = page.getViewport({scale: scale});
+        for (let i = 1; i <= pages; i++) {
+            let file = 'page-' + i + '.jpg';
+            let path = p.join(this.tmp, file);
+            let virtualPath = p.join(this.path, file);
 
-				let canvas = document.createElement('canvas');
-				canvas.width = viewport.width;
-				canvas.height = viewport.height;
-				let context = canvas.getContext('2d');
+            let status = this.getFileStatus(file);
 
-				await page.render({canvasContext: context, viewport: viewport}).promise;
+            if ((!only || only[file]) && (this.config.force || !status.extracted || status.width !== this.config.width || !fs.existsSync(path))) {
+                // Render page
+                let page = await pdf.getPage(i);
 
-				let imageData = canvas.toDataURL('image/jpeg', 1);
+                let width = (status?.size?.width || page.getViewport({scale: 1}).width);
 
-				fs.writeFileSync(path, Buffer.from(imageData.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64'));
+                let scale = this.config.width / width;
+                let viewport = page.getViewport({scale: scale});
 
-				this.setFileStatus(file, {page: i, extracted: true, width: this.config.width});
+                let canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                let context = canvas.getContext('2d');
 
-				this.setProgress(progressIndex++ / totalFiles);
-				this.whenExtractFile(virtualPath);
-			}
-		}
+                await page.render({canvasContext: context, viewport: viewport}).promise;
 
-		this.setProgress(1);
+                let imageData = canvas.toDataURL('image/jpeg', 1);
 
-		console.timeEnd('extractPdf: '+this.path);
+                fs.writeFileSync(path, Buffer.from(imageData.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64'));
 
-		return;
+                this.setFileStatus(file, {page: i, extracted: true, width: this.config.width});
 
-	}
+                this.setProgress(progressIndex++ / totalFiles);
+                this.whenExtractFile(virtualPath);
+            }
+        }
 
-	this.renderCanvasPdf = async function(file, canvas) {
+        this.setProgress(1);
 
-		let pdf = await this.openPdf();
-		let pages = pdf.numPages;
+        console.timeEnd('extractPdf: ' + this.path);
 
-		let status = this.getFileStatus(file);
+        return;
 
-		if((status && (status.widthRendered !== this.config.width || status.canvasRendered !== canvas)) || this.config.force)
-		{
-			console.log('renderCanvasPdf');
+    }
 
-			// Render page
-			let page = await pdf.getPage(status.page);
+    this.renderCanvasPdf = async function (file, canvas) {
 
-			let scale = this.config.width / status.size.width;
-			let viewport = page.getViewport({scale: scale});
+        let pdf = await this.openPdf();
+        let pages = pdf.numPages;
 
-			canvas.width = viewport.width = Math.round(viewport.width);
-			canvas.height = viewport.height = Math.round(viewport.height);
-			let context = canvas.getContext('2d');
+        let status = this.getFileStatus(file);
 
-			await page.render({canvasContext: context, viewport: viewport}).promise;
+        if ((status && (status.widthRendered !== this.config.width || status.canvasRendered !== canvas)) || this.config.force) {
+            console.log('renderCanvasPdf');
 
-			this.setFileStatus(file, {rendered: true, widthRendered: this.config.width, canvasRendered: canvas});
+            // Render page
+            let page = await pdf.getPage(status.page);
 
-			return {width: viewport.width, height: viewport.height};
-		}
+            let scale = this.config.width / status.size.width;
+            let viewport = page.getViewport({scale: scale});
 
-		return false;
-	}
+            canvas.width = viewport.width = Math.round(viewport.width);
+            canvas.height = viewport.height = Math.round(viewport.height);
+            let context = canvas.getContext('2d');
 
+            await page.render({canvasContext: context, viewport: viewport}).promise;
 
+            this.setFileStatus(file, {rendered: true, widthRendered: this.config.width, canvasRendered: canvas});
 
-	// ePub
-	this.epub = false;
+            return {width: viewport.width, height: viewport.height};
+        }
 
-	this.openEpub = async function() {
+        return false;
+    }
 
-		if(this.epub) return this.epub;
 
-		if(ebook.epub === false)
-			ebook.epub = require(p.join(appDir, 'scripts/ebook/epub.js'));
+    // ePub
+    this.epub = false;
 
-		this.macosStartAccessingSecurityScopedResource(this.realPath);
-		this.epub = ebook.epub.load(this.realPath);
+    this.openEpub = async function () {
 
-		return this.epub;
+        if (this.epub) return this.epub;
 
-	}
+        if (ebook.epub === false)
+            ebook.epub = require(p.join(appDir, 'scripts/ebook/epub.js'));
 
-	this.readEpub = async function() {
+        this.macosStartAccessingSecurityScopedResource(this.realPath);
+        this.epub = ebook.epub.load(this.realPath);
 
-		let _this = this;
+        return this.epub;
 
-		let files = [];
+    }
 
-		console.time('readEpub: '+this.path);
+    this.readEpub = async function () {
 
-		let epub = await this.openEpub();
-		let _files = await epub.readEpubFiles();
+        let _this = this;
 
-		for(let i = 0, len = _files.length; i < len; i++)
-		{
-			let file = _files[i];
+        let files = [];
 
-			files.push({name: file, path: p.join(this.path, file), folder: false, compressed: false});
-			this.setFileStatus(file, {extracted: false});
-		}
+        console.time('readEpub: ' + this.path);
 
-		console.timeEnd('readEpub: '+this.path);
+        let epub = await this.openEpub();
+        let _files = await epub.readEpubFiles();
 
-		return this.files = files;
+        for (let i = 0, len = _files.length; i < len; i++) {
+            let file = _files[i];
 
-	}
+            files.push({name: file, path: p.join(this.path, file), folder: false, compressed: false});
+            this.setFileStatus(file, {extracted: false});
+        }
 
-	this.readEpubMetadata = async function() {
+        console.timeEnd('readEpub: ' + this.path);
 
-		let epub = await this.openEpub();
-		let metadata = await epub.readEpubMetadata();
+        return this.files = files;
 
-		return {
-			title: metadata.title || '',
+    }
 
-			author: metadata.creator || '',
-			publisher: metadata.publisher || '',
-			contributor: metadata.contributor || [],
+    this.readEpubMetadata = async function () {
 
-			/*author: comicInfo.Writer || '',
-			writer: comicInfo.Writer || '',
-			penciller: comicInfo.Penciller || '',
-			inker: comicInfo.Inker || '',
-			colorist: comicInfo.Colorist || '',
-			letterer: comicInfo.Letterer || '',
-			coverArtist: comicInfo.CoverArtist || '',
-			editor: comicInfo.Editor || '',
-			translator: comicInfo.Translator || '',
-			publisher: comicInfo.Publisher || '',
-			imprint: comicInfo.Imprint || '',*/
+        let epub = await this.openEpub();
+        let metadata = await epub.readEpubMetadata();
 
-			subject: metadata.subject || [],
-			genre: metadata.genre || '',
+        return {
+            title: metadata.title || '',
 
-			description: metadata.description || '',
-			longDescription: metadata.longDescription || '',
-			rights: metadata.rights || '',
+            author: metadata.creator || '',
+            publisher: metadata.publisher || '',
+            contributor: metadata.contributor || [],
 
-			language: metadata.language || '',
+            /*author: comicInfo.Writer || '',
+            writer: comicInfo.Writer || '',
+            penciller: comicInfo.Penciller || '',
+            inker: comicInfo.Inker || '',
+            colorist: comicInfo.Colorist || '',
+            letterer: comicInfo.Letterer || '',
+            coverArtist: comicInfo.CoverArtist || '',
+            editor: comicInfo.Editor || '',
+            translator: comicInfo.Translator || '',
+            publisher: comicInfo.Publisher || '',
+            imprint: comicInfo.Imprint || '',*/
 
-			web: metadata.identifier ? app.extract(/^(?:url|uri):(.*)/iu, metadata.identifier) : '',
-			identifier: metadata.identifier,
-			source: metadata.source,
+            subject: metadata.subject || [],
+            genre: metadata.genre || '',
 
-			releaseDate: metadata.pubdate || '',
-			modifiedDate: metadata.modified_date || '',
+            description: metadata.description || '',
+            longDescription: metadata.longDescription || '',
+            rights: metadata.rights || '',
 
-			metadata: metadata,
-		};
+            language: metadata.language || '',
 
-	}
+            web: metadata.identifier ? app.extract(/^(?:url|uri):(.*)/iu, metadata.identifier) : '',
+            identifier: metadata.identifier,
+            source: metadata.source,
 
-	this.extractEpub = async function() {
+            releaseDate: metadata.pubdate || '',
+            modifiedDate: metadata.modified_date || '',
 
-		console.time('extractEpub: '+this.path);
+            metadata: metadata,
+        };
 
-		let epub = await this.openEpub();
-		let only = this.config.only;
-		let _this = this;
+    }
 
-		let files = await this.read();
-		files = this.filesToOnedimension(files);
+    this.extractEpub = async function () {
 
-		let filesToRender = [];
+        console.time('extractEpub: ' + this.path);
 
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			let file = files[i].pathInCompressed;
-			let path = p.join(this.tmp, file);
-			let virtualPath = p.join(this.path, file);
+        let epub = await this.openEpub();
+        let only = this.config.only;
+        let _this = this;
 
-			let status = this.getFileStatus(file);
-			
-			if((!only || only[file]) && (this.config.force || !status.extracted || status.width !== this.config.width || !fs.existsSync(path)))
-			{
-				filesToRender.push({
-					name: file,
-					path: path,
-				});
-			}
-		}
+        let files = await this.read();
+        files = this.filesToOnedimension(files);
 
-		let totalFiles = filesToRender.length;
-		let progressIndex = 1;
+        let filesToRender = [];
 
-		if(epub.extracted)
-			this.setProgress(0.5);
-		else
-			this.setProgress(0);
+        for (let i = 0, len = files.length; i < len; i++) {
+            let file = files[i].pathInCompressed;
+            let path = p.join(this.tmp, file);
+            let virtualPath = p.join(this.path, file);
 
-		await epub.renderFiles(filesToRender, {width: this.config.width}, function(file){
+            let status = this.getFileStatus(file);
 
-			let path = p.join(_this.tmp, file);
-			let virtualPath = p.join(_this.path, file);
+            if ((!only || only[file]) && (this.config.force || !status.extracted || status.width !== this.config.width || !fs.existsSync(path))) {
+                filesToRender.push({
+                    name: file,
+                    path: path,
+                });
+            }
+        }
 
-			_this.setFileStatus(file, {extracted: true, width: _this.config.width});
+        let totalFiles = filesToRender.length;
+        let progressIndex = 1;
 
-			_this.setProgress(epub.extracted ? (0.5 + progressIndex++ / totalFiles / 2) : (progressIndex++ / totalFiles));
-			_this.whenExtractFile(virtualPath);
+        if (epub.extracted)
+            this.setProgress(0.5);
+        else
+            this.setProgress(0);
 
-		});
+        await epub.renderFiles(filesToRender, {width: this.config.width}, function (file) {
 
-		this.setProgress(1);
+            let path = p.join(_this.tmp, file);
+            let virtualPath = p.join(_this.path, file);
 
-		console.timeEnd('extractEpub: '+this.path);
+            _this.setFileStatus(file, {extracted: true, width: _this.config.width});
 
-		return;
+            _this.setProgress(epub.extracted ? (0.5 + progressIndex++ / totalFiles / 2) : (progressIndex++ / totalFiles));
+            _this.whenExtractFile(virtualPath);
 
-	}
+        });
 
-	this.renderEpubPage = async function(file, canvas) {
+        this.setProgress(1);
 
+        console.timeEnd('extractEpub: ' + this.path);
 
-	}
+        return;
 
-	this.ebookPagesEpub = async function(config = {}) {
+    }
 
-		console.time('ebookPagesEpub: '+this.path);
+    this.renderEpubPage = async function (file, canvas) {
 
-		let epub = await this.openEpub();
-		let _this = this;
 
-		let files = await this.read();
-		files = this.filesToOnedimension(files);
+    }
 
-		let totalFiles = files.length;
-		let progressIndex = 1;
+    this.ebookPagesEpub = async function (config = {}) {
 
-		if(epub.extracted)
-			this.setProgress(0.5);
-		else
-			this.setProgress(0);
+        console.time('ebookPagesEpub: ' + this.path);
 
-		let pages = await epub.epubPages(config, function(){
+        let epub = await this.openEpub();
+        let _this = this;
 
-			// _this.setFileStatus(file, {extracted: true, width: _this.config.width});
-			_this.setProgress(epub.extracted ? (0.5 + progressIndex++ / totalFiles / 2) : (progressIndex++ / totalFiles));
+        let files = await this.read();
+        files = this.filesToOnedimension(files);
 
-		});
+        let totalFiles = files.length;
+        let progressIndex = 1;
 
-		this.setProgress(1);
+        if (epub.extracted)
+            this.setProgress(0.5);
+        else
+            this.setProgress(0);
 
-		console.timeEnd('ebookPagesEpub: '+this.path);
+        let pages = await epub.epubPages(config, function () {
 
-		return pages;
+            // _this.setFileStatus(file, {extracted: true, width: _this.config.width});
+            _this.setProgress(epub.extracted ? (0.5 + progressIndex++ / totalFiles / 2) : (progressIndex++ / totalFiles));
 
-	}
+        });
 
-	this.ebookEpub = async function() {
+        this.setProgress(1);
 
-		let epub = await this.openEpub();
-		return epub.ebook;
+        console.timeEnd('ebookPagesEpub: ' + this.path);
 
-	}
+        return pages;
 
-	this.macosScopedResources = [];
+    }
 
-	this.macosStartAccessingSecurityScopedResource = function(path) {
+    this.ebookEpub = async function () {
 
-		if(macosMAS)
-		{
-			let securityScopedBookmarks = storage.get('securityScopedBookmarks');
-			let segments = splitPath(path);
+        let epub = await this.openEpub();
+        return epub.ebook;
 
-			if(!segments[0])
-				segments[0] = p.sep;
+    }
 
-			for(let i = 1, len = segments.length; i < len; i++)
-			{
-				let _path = p.join(...segments);
-				let bookmark = securityScopedBookmarks[_path] || false;
+    this.macosScopedResources = [];
 
-				if(bookmark)
-				{
-					try
-					{
-						this.macosScopedResources.push(electronRemote.app.startAccessingSecurityScopedResource(bookmark));
-						break;
-					}
-					catch {}
-				}
+    this.macosStartAccessingSecurityScopedResource = function (path) {
 
-				segments.pop();
-			}
-		}
+        if (macosMAS) {
+            let securityScopedBookmarks = storage.get('securityScopedBookmarks');
+            let segments = splitPath(path);
 
-	}
+            if (!segments[0])
+                segments[0] = p.sep;
 
-	this.destroy = function() {
+            for (let i = 1, len = segments.length; i < len; i++) {
+                let _path = p.join(...segments);
+                let bookmark = securityScopedBookmarks[_path] || false;
 
-		if(this.tar) this.tar.destroy();
-		if(this.pdf) this.pdf.destroy();
-		if(this.epub) this.epub.destroy();
+                if (bookmark) {
+                    try {
+                        this.macosScopedResources.push(electronRemote.app.startAccessingSecurityScopedResource(bookmark));
+                        break;
+                    } catch {
+                    }
+                }
 
-		delete this.zip;
-		delete this._7z;
-		delete this.rar;
-		delete this.tar;
-		delete this.pdf;
-		delete this.epub;
+                segments.pop();
+            }
+        }
 
-		this.filesStatus = {};
+    }
 
-		// Stop accessing security scoped resources
-		for(let i = 0, len = this.macosScopedResources.length; i < len; i++)
-		{
-			this.macosScopedResources[i]();
-		}
+    this.destroy = function () {
 
-		this.macosScopedResources = [];
+        if (this.tar) this.tar.destroy();
+        if (this.pdf) this.pdf.destroy();
+        if (this.epub) this.epub.destroy();
 
-	}
+        delete this.zip;
+        delete this._7z;
+        delete this.rar;
+        delete this.tar;
+        delete this.pdf;
+        delete this.epub;
+
+        this.filesStatus = {};
+
+        // Stop accessing security scoped resources
+        for (let i = 0, len = this.macosScopedResources.length; i < len; i++) {
+            this.macosScopedResources[i]();
+        }
+
+        this.macosScopedResources = [];
+
+    }
 
 }
 
 // Use this to remove generated vector images if window.devicePixelRatio is changed
-async function removeTmpVector()
-{
-	let file = fileManager.file(tempFolder);
-	let folders = await file.read();
+async function removeTmpVector() {
+    let file = fileManager.file(tempFolder);
+    let folders = await file.read();
 
-	let devicePixelRatio = window.devicePixelRatio;
+    let devicePixelRatio = window.devicePixelRatio;
 
-	for(let i = 0, len = folders.length; i < len; i++)
-	{
-		let folder = folders[i];
-		let vector = p.join(tempFolder, folder.name, folder.name+'-opencomic-is-vector.txt');
+    for (let i = 0, len = folders.length; i < len; i++) {
+        let folder = folders[i];
+        let vector = p.join(tempFolder, folder.name, folder.name + '-opencomic-is-vector.txt');
 
-		if(fs.existsSync(vector))
-		{
-			let _devicePixelRatio = +readFile(vector);
+        if (fs.existsSync(vector)) {
+            let _devicePixelRatio = +readFile(vector);
 
-			if(devicePixelRatio !== _devicePixelRatio)
-				fs.rmdir(p.join(tempFolder, folder.name), {recursive: true, force: true}, function(){});
-		}
-	}
+            if (devicePixelRatio !== _devicePixelRatio)
+                fs.rmdir(p.join(tempFolder, folder.name), {recursive: true, force: true}, function () {
+                });
+        }
+    }
 }
 
 var downloadedCompressedFiles = {
-	list: [],
-	sizes: {},
+    list: [],
+    sizes: {},
 };
 
-function downloadedCompressedFile(path)
-{
-	let realPath = fileManager.realPath(path, -1);
+function downloadedCompressedFile(path) {
+    let realPath = fileManager.realPath(path, -1);
 
-	let totalSize = 0;
-	let list = [];
+    let totalSize = 0;
+    let list = [];
 
-	for(let i = 0, len = downloadedCompressedFiles.list.length; i < len; i++)
-	{
-		let _realPath = downloadedCompressedFiles.list[i];
+    for (let i = 0, len = downloadedCompressedFiles.list.length; i < len; i++) {
+        let _realPath = downloadedCompressedFiles.list[i];
 
-		if(fs.existsSync(_realPath) && _realPath !== realPath)
-		{
-			let size = downloadedCompressedFiles.sizes[_realPath] || fs.statSync(_realPath).size;
+        if (fs.existsSync(_realPath) && _realPath !== realPath) {
+            let size = downloadedCompressedFiles.sizes[_realPath] || fs.statSync(_realPath).size;
 
-			downloadedCompressedFiles.sizes[_realPath] = size;
-			list.push(_realPath);
+            downloadedCompressedFiles.sizes[_realPath] = size;
+            list.push(_realPath);
 
-			totalSize += size;
-		}
-	}
+            totalSize += size;
+        }
+    }
 
-	downloadedCompressedFiles.list = list;
-	downloadedCompressedFiles.list.push(realPath);
+    downloadedCompressedFiles.list = list;
+    downloadedCompressedFiles.list.push(realPath);
 
-	let size = downloadedCompressedFiles.sizes[realPath] || fs.statSync(realPath).size;
+    let size = downloadedCompressedFiles.sizes[realPath] || fs.statSync(realPath).size;
 
-	downloadedCompressedFiles.sizes[realPath] = size;
-	totalSize += size;
+    downloadedCompressedFiles.sizes[realPath] = size;
+    totalSize += size;
 
-	let maxSize = ((config.tmpMaxSize || 2) / 2) * 1000 * 1000 * 1000; // 50% of tmpMaxSize
+    let maxSize = ((config.tmpMaxSize || 2) / 2) * 1000 * 1000 * 1000; // 50% of tmpMaxSize
 
-	if(totalSize > maxSize)
-	{
-		let list = [];
-		let sizes = {};
+    if (totalSize > maxSize) {
+        let list = [];
+        let sizes = {};
 
-		for(let i = 0, len = downloadedCompressedFiles.list.length; i < len; i++)
-		{
-			let _realPath = downloadedCompressedFiles.list[i];
-			let size = downloadedCompressedFiles.sizes[_realPath] || fs.statSync(_realPath).size;
+        for (let i = 0, len = downloadedCompressedFiles.list.length; i < len; i++) {
+            let _realPath = downloadedCompressedFiles.list[i];
+            let size = downloadedCompressedFiles.sizes[_realPath] || fs.statSync(_realPath).size;
 
-			if(totalSize > maxSize)
-			{
-				if(fs.existsSync(_realPath))
-				{
-					totalSize -= size;
-					fs.unlinkSync(_realPath);
-				}
-			}
-			else
-			{
-				list.push(_realPath);
-				sizes[_realPath] = size;
-			}
-		}
+            if (totalSize > maxSize) {
+                if (fs.existsSync(_realPath)) {
+                    totalSize -= size;
+                    fs.unlinkSync(_realPath);
+                }
+            } else {
+                list.push(_realPath);
+                sizes[_realPath] = size;
+            }
+        }
 
-		downloadedCompressedFiles.list = list;
-		downloadedCompressedFiles.sizes = sizes;
-	}
+        downloadedCompressedFiles.list = list;
+        downloadedCompressedFiles.sizes = sizes;
+    }
 }
 
-function realPath(path, index = 0, prefixes = false)
-{
-	let segments = splitPath(path);
-	let len = segments.length;
+function realPath(path, index = 0, prefixes = false) {
+    let segments = splitPath(path);
+    let len = segments.length;
 
-	let virtualPath;
+    let virtualPath;
 
-	let newPath = virtualPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
-	let numSegments = len + index;
+    let newPath = virtualPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
+    let numSegments = len + index;
 
-	if(isServer(path))
-	{
-		let adress = p.normalize(serverClient.getAdress(path));
+    if (isServer(path)) {
+        let adress = p.normalize(serverClient.getAdress(path));
 
-		newPath = p.join(tempFolder, sha1(adress));
-		virtualPath = adress;
-		
-		if(!segments[1])
-			segments[0] = segments[1] = segments[2] = '';
-		else
-			segments[0] = segments[1] = '';
-	}
+        newPath = p.join(tempFolder, sha1(adress));
+        virtualPath = adress;
 
-	for(let i = 1; i < len; i++)
-	{
-		newPath = p.join(newPath, segments[i]);
-		virtualPath = p.join(virtualPath, segments[i]);
+        if (!segments[1])
+            segments[0] = segments[1] = segments[2] = '';
+        else
+            segments[0] = segments[1] = '';
+    }
 
-		if(i < numSegments)
-		{
-			let extension = fileExtension(newPath);
+    for (let i = 1; i < len; i++) {
+        newPath = p.join(newPath, segments[i]);
+        virtualPath = p.join(virtualPath, segments[i]);
 
-			if(extension && inArray(extension, compressedExtensions.all)/* && fs.existsSync(newPath) && !fs.statSync(newPath).isDirectory()*/)
-			{
-				let sha = sha1(p.normalize(virtualPath));
+        if (i < numSegments) {
+            let extension = fileExtension(newPath);
 
-				if(prefixes)
-				{
-					for(let ext in prefixes)
-					{
-						if(inArray(extension, compressedExtensions[ext]))
-						{
-							sha = prefixes[ext]+'-'+sha;
+            if (extension && inArray(extension, compressedExtensions.all)/* && fs.existsSync(newPath) && !fs.statSync(newPath).isDirectory()*/) {
+                let sha = sha1(p.normalize(virtualPath));
 
-							break;
-						}
-					}
-				}
+                if (prefixes) {
+                    for (let ext in prefixes) {
+                        if (inArray(extension, compressedExtensions[ext])) {
+                            sha = prefixes[ext] + '-' + sha;
 
-				newPath = p.join(tempFolder, sha);
-			}
-		}
-	}
+                            break;
+                        }
+                    }
+                }
 
-	return newPath;
+                newPath = p.join(tempFolder, sha);
+            }
+        }
+    }
+
+    return newPath;
 }
 
 var serverInOfflineMode = false;
 
-function setServerInOfflineMode(value = false)
-{
-	serverInOfflineMode = value;
+function setServerInOfflineMode(value = false) {
+    serverInOfflineMode = value;
 }
 
-function isServer(path)
-{
-	if(/^(?:smb|ssh|sftp|scp|ftp|ftps|s3)\:[\/\\]{1,2}/.test(path))
-		return true;
+function isServer(path) {
+    if (/^(?:smb|ssh|sftp|scp|ftp|ftps|s3)\:[\/\\]{1,2}/.test(path))
+        return true;
 
-	return false;
+    return false;
 }
 
-function isCompressed(name)
-{
-	let ext = fileExtension(name);
+function isCompressed(name) {
+    let ext = fileExtension(name);
 
-	if(inArray(ext, compressedExtensions.all))
-		return true;
+    if (inArray(ext, compressedExtensions.all))
+        return true;
 
-	return false;
+    return false;
 }
 
-function firstCompressedFile(path, index = 0, checkDirectory = true)
-{
-	let segments = splitPath(path);
-	let len = segments.length;
+function firstCompressedFile(path, index = 0, checkDirectory = true) {
+    let segments = splitPath(path);
+    let len = segments.length;
 
-	let newPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
-	let numSegments = len + index;
+    let newPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
+    let numSegments = len + index;
 
-	let _isServer = isServer(path);
+    let _isServer = isServer(path);
 
-	for(let i = 1; i < len; i++)
-	{
-		newPath = p.join(newPath, segments[i]);
+    for (let i = 1; i < len; i++) {
+        newPath = p.join(newPath, segments[i]);
 
-		if(i < numSegments)
-		{
-			let extension = fileExtension(newPath);
+        if (i < numSegments) {
+            let extension = fileExtension(newPath);
 
-			if(extension && inArray(extension, compressedExtensions.all) && (!checkDirectory || _isServer || !fs.statSync(newPath).isDirectory()))
-				return newPath;
-		}
-	}
+            if (extension && inArray(extension, compressedExtensions.all) && (!checkDirectory || _isServer || !fs.statSync(newPath).isDirectory()))
+                return newPath;
+        }
+    }
 
-	return newPath;
+    return newPath;
 }
 
-function firstCompressedFileRealPath(path, index = 0)
-{
-	return isServer(path) ? realPath(firstCompressedFile(path, index), -1) : firstCompressedFile(path, index);
+function firstCompressedFileRealPath(path, index = 0) {
+    return isServer(path) ? realPath(firstCompressedFile(path, index), -1) : firstCompressedFile(path, index);
 }
 
 
-function lastCompressedFile(path, index = 0)
-{
-	let segments = splitPath(path);
-	let len = segments.length;
+function lastCompressedFile(path, index = 0) {
+    let segments = splitPath(path);
+    let len = segments.length;
 
-	let newPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
-	let numSegments = len + index;
+    let newPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
+    let numSegments = len + index;
 
-	let lastCompressed = false;
+    let lastCompressed = false;
 
-	for(let i = 1; i < len; i++)
-	{
-		newPath = p.join(newPath, segments[i]);
+    for (let i = 1; i < len; i++) {
+        newPath = p.join(newPath, segments[i]);
 
-		if(i < numSegments)
-		{
-			let extension = fileExtension(newPath);
+        if (i < numSegments) {
+            let extension = fileExtension(newPath);
 
-			if(extension && inArray(extension, compressedExtensions.all))
-				lastCompressed = newPath;
-		}
-	}
+            if (extension && inArray(extension, compressedExtensions.all))
+                lastCompressed = newPath;
+        }
+    }
 
-	return lastCompressed;
+    return lastCompressed;
 }
 
-function allCompressedFiles(path, index = 0)
-{
-	let segments = splitPath(path);
-	let len = segments.length;
+function allCompressedFiles(path, index = 0) {
+    let segments = splitPath(path);
+    let len = segments.length;
 
-	let newPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
-	let numSegments = len + index;
+    let newPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
+    let numSegments = len + index;
 
-	let lastCompressed = false;
+    let lastCompressed = false;
 
-	let files = [];
+    let files = [];
 
-	for(let i = 1; i < len; i++)
-	{
-		newPath = p.join(newPath, segments[i]);
+    for (let i = 1; i < len; i++) {
+        newPath = p.join(newPath, segments[i]);
 
-		if(i < numSegments)
-		{
-			let extension = fileExtension(newPath);
+        if (i < numSegments) {
+            let extension = fileExtension(newPath);
 
-			if(extension && inArray(extension, compressedExtensions.all))
-				files.push(newPath);
-		}
-	}
+            if (extension && inArray(extension, compressedExtensions.all))
+                files.push(newPath);
+        }
+    }
 
-	return files;
+    return files;
 }
 
-function containsCompressed(path, index = 0)
-{
-	let segments = splitPath(path);
-	let len = segments.length;
+function containsCompressed(path, index = 0) {
+    let segments = splitPath(path);
+    let len = segments.length;
 
-	var virtualPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
-	let numSegments = len + index;
+    var virtualPath = (len > 0) ? (isEmpty(segments[0]) ? '/' : segments[0]) : '';
+    let numSegments = len + index;
 
-	let _isServer = isServer(path);
+    let _isServer = isServer(path);
 
-	for(let i = 1; i < len; i++)
-	{
-		virtualPath = p.join(virtualPath, segments[i]);
+    for (let i = 1; i < len; i++) {
+        virtualPath = p.join(virtualPath, segments[i]);
 
-		if(i < numSegments)
-		{
-			var extension = fileExtension(virtualPath);
+        if (i < numSegments) {
+            var extension = fileExtension(virtualPath);
 
-			if(extension && inArray(extension, compressedExtensions.all) && (_isServer || !fs.statSync(virtualPath).isDirectory()))
-			{
-				return true;
-			}
-		}
-	}
+            if (extension && inArray(extension, compressedExtensions.all) && (_isServer || !fs.statSync(virtualPath).isDirectory())) {
+                return true;
+            }
+        }
+    }
 
-	return false;
+    return false;
 }
 
-function splitPath(path)
-{
-	const first = app.extract(/^([\\\/]*[^\\\/]+)[\\\/]*/, path);
-	const segments = path.replace(/^([\\\/]*[^\\\/]+)[\\\/]*/, '').split(p.sep).filter(i => i);
+function splitPath(path) {
+    const first = app.extract(/^([\\\/]*[^\\\/]+)[\\\/]*/, path);
+    const segments = path.replace(/^([\\\/]*[^\\\/]+)[\\\/]*/, '').split(p.sep).filter(i => i);
 
-	segments.unshift(first);
+    segments.unshift(first);
 
-	return segments;
+    return segments;
 }
 
-function isParentPath(parentPath, fullPath)
-{
-	if(new RegExp('^\s*'+pregQuote(parentPath)).test(fullPath))
-		return true;
+function isParentPath(parentPath, fullPath) {
+    if (new RegExp('^\s*' + pregQuote(parentPath)).test(fullPath))
+        return true;
 
-	return false;
+    return false;
 }
 
-function removePathPart(path, partToRemove)
-{
-	path = path.replace(new RegExp('^\s*'+pregQuote(partToRemove)), '');
-	path = path.replace(new RegExp('^\s*'+pregQuote(p.sep)), '');
+function removePathPart(path, partToRemove) {
+    path = path.replace(new RegExp('^\s*' + pregQuote(partToRemove)), '');
+    path = path.replace(new RegExp('^\s*' + pregQuote(p.sep)), '');
 
-	return path;
+    return path;
 }
 
-function pathType(path)
-{
-	if(inArray(mime.getType(path), compatibleMime))
-		return {folder: false, compressed: false};
-	else if(inArray(fileExtension(path), compressedExtensions.all))
-		return {folder: false, compressed: true};
-	else if(fs.statSync(path).isDirectory())
-		return {folder: true, compressed: false};
-	else
-		return false;
+function pathType(path) {
+    if (inArray(mime.getType(path), compatibleMime))
+        return {folder: false, compressed: false};
+    else if (inArray(fileExtension(path), compressedExtensions.all))
+        return {folder: false, compressed: true};
+    else if (fs.statSync(path).isDirectory())
+        return {folder: true, compressed: false};
+    else
+        return false;
 }
 
-function simpleExists(path)
-{
-	if(isServer(path))
-	{
-		return true;
-	}
-	else
-	{
-		path = firstCompressedFile(path, 0, false);
+function simpleExists(path) {
+    if (isServer(path)) {
+        return true;
+    } else {
+        path = firstCompressedFile(path, 0, false);
 
-		if(fs.existsSync(path))
-			return true;
-	}
+        if (fs.existsSync(path))
+            return true;
+    }
 
-	return false;
+    return false;
 }
 
-function replaceReservedCharacters(filename)
-{
-	return filename.replace(/[/\\?%*:|"<>]/g, '-');
+function replaceReservedCharacters(filename) {
+    return filename.replace(/[/\\?%*:|"<>]/g, '-');
 }
 
-function filtered(files, specialFiles = false)
-{
-	let filtered = [];
+function filtered(files, specialFiles = false) {
+    let filtered = [];
 
-	if(files)
-	{
-		for(let i = 0, len = files.length; i < len; i++)
-		{
-			let file = files[i];
+    if (files) {
+        for (let i = 0, len = files.length; i < len; i++) {
+            let file = files[i];
 
-			if(file.folder || file.compressed)
-				filtered.push(file);
-			else if(inArray(mime.getType(file.path), compatibleMime) || (specialFiles && inArray(app.extname(file.path), compatibleSpecialExtensions)))
-				filtered.push(file);
-		}
-	}
+            if (file.folder || file.compressed)
+                filtered.push(file);
+            else if (inArray(mime.getType(file.path), compatibleMime) || (specialFiles && inArray(app.extname(file.path), compatibleSpecialExtensions)))
+                filtered.push(file);
+        }
+    }
 
-	return filtered;
+    return filtered;
 }
 
-function sort(files)
-{
-	if(files)
-	{
-		let sort = config.sort;
-		let sortInvert = config.sortInvert;
-		let foldersFirst = config.foldersFirst;
+function sort(files) {
+    if (files) {
+        let sort = config.sort;
+        let sortInvert = config.sortInvert;
+        let foldersFirst = config.foldersFirst;
 
-		let order = '';
+        let order = '';
 
-		if(sort == 'name')
-			order = 'simple';
-		else if(sort == 'numeric')
-			order = 'numeric';
-		else
-			order = 'simple-numeric';
+        if (sort == 'name')
+            order = 'simple';
+        else if (sort == 'numeric')
+            order = 'numeric';
+        else
+            order = 'simple-numeric';
 
-		files.sort(function (a, b) {
-			if(foldersFirst && (a.folder || a.compressed) && !(b.folder || b.compressed)) return -1; 
-			if(foldersFirst && (b.folder || b.compressed) && !(a.folder || a.compressed)) return 1; 
-			return (sortInvert) ? -(dom.orderBy(a, b, order, 'name')) : dom.orderBy(a, b, order, 'name');
-		});
+        files.sort(function (a, b) {
+            if (foldersFirst && (a.folder || a.compressed) && !(b.folder || b.compressed)) return -1;
+            if (foldersFirst && (b.folder || b.compressed) && !(a.folder || a.compressed)) return 1;
+            return (sortInvert) ? -(dom.orderBy(a, b, order, 'name')) : dom.orderBy(a, b, order, 'name');
+        });
 
-		return files;
-	}
+        return files;
+    }
 }
 
-function macosSecurityScopedBookmarks(files)
-{
-	if(macosMAS && files.bookmarks && files.bookmarks[0])
-	{
-		let securityScopedBookmarks = storage.get('securityScopedBookmarks');
+function macosSecurityScopedBookmarks(files) {
+    if (macosMAS && files.bookmarks && files.bookmarks[0]) {
+        let securityScopedBookmarks = storage.get('securityScopedBookmarks');
 
-		for(let i = 0, len = files.bookmarks.length; i < len; i++)
-		{
-			securityScopedBookmarks[p.normalize(files.filePaths[i])] = files.bookmarks[i];
-		}
+        for (let i = 0, len = files.bookmarks.length; i < len; i++) {
+            securityScopedBookmarks[p.normalize(files.filePaths[i])] = files.bookmarks[i];
+        }
 
-		storage.set('securityScopedBookmarks', securityScopedBookmarks);
-	}
+        storage.set('securityScopedBookmarks', securityScopedBookmarks);
+    }
 }
 
-async function dirSize(dir)
-{
-	let stat = await fsp.stat(dir);
-	if(!stat.isDirectory())
-		return stat.size;
+async function dirSize(dir) {
+    let stat = await fsp.stat(dir);
+    if (!stat.isDirectory())
+        return stat.size;
 
-	let files = await fsp.readdir(dir, {withFileTypes: true});
-	let size = 0;
+    let files = await fsp.readdir(dir, {withFileTypes: true});
+    let size = 0;
 
-	for(let i = 0, len = files.length; i < len; i++)
-	{
-		let file = files[i];
-		let path = p.join(dir, file.name);
+    for (let i = 0, len = files.length; i < len; i++) {
+        let file = files[i];
+        let path = p.join(dir, file.name);
 
-		if(file.isDirectory())
-			size += await dirSize(path);
-		else if(file.isFile())
-			size += (await fsp.stat(path)).size;
-	}
+        if (file.isDirectory())
+            size += await dirSize(path);
+        else if (file.isFile())
+            size += (await fsp.stat(path)).size;
+    }
 
-	return size;
+    return size;
 }
 
-function dirSizeSync(dir)
-{
-	let stat = fs.statSync(dir);
-	if(!stat.isDirectory())
-		return stat.size;
+function dirSizeSync(dir) {
+    let stat = fs.statSync(dir);
+    if (!stat.isDirectory())
+        return stat.size;
 
-	let files = fs.readdirSync(dir, {withFileTypes: true});
-	let size = 0;
+    let files = fs.readdirSync(dir, {withFileTypes: true});
+    let size = 0;
 
-	for(let i = 0, len = files.length; i < len; i++)
-	{
-		let file = files[i];
-		let path = p.join(dir, file.name);
+    for (let i = 0, len = files.length; i < len; i++) {
+        let file = files[i];
+        let path = p.join(dir, file.name);
 
-		if(file.isDirectory())
-			size += dirSizeSync(path);
-		else if(file.isFile())
-			size += fs.statSync(path).size;
-	}
+        if (file.isDirectory())
+            size += dirSizeSync(path);
+        else if (file.isFile())
+            size += fs.statSync(path).size;
+    }
 
-	return size;
+    return size;
 }
 
 var prevDevicePixelRatio = window.devicePixelRatio;
 
-window.addEventListener('resize', function() {
+window.addEventListener('resize', function () {
 
-	if(prevDevicePixelRatio !== window.devicePixelRatio)
-	{
-		prevDevicePixelRatio = window.devicePixelRatio;
+    if (prevDevicePixelRatio !== window.devicePixelRatio) {
+        prevDevicePixelRatio = window.devicePixelRatio;
 
-		removeTmpVector();
-	}
+        removeTmpVector();
+    }
 
 });
 
 module.exports = {
-	file: function(path, _config = false) {
-		return new file(path, _config);
-	},
-	fileCompressed: function(path, realPath = false, forceType = false, prefixes = false){ // This consider moving it to a separate file
-		return new fileCompressed(path, realPath, forceType, prefixes);
-	},
-	removeTmpVector: removeTmpVector,
-	removePathPart: removePathPart,
-	filtered: filtered,
-	sort: sort,
-	realPath: realPath,
-	pathType: pathType,
-	isCompressed: isCompressed,
-	isServer: isServer,
-	setServerInOfflineMode: setServerInOfflineMode,
-	serverInOfflineMode: function(){return serverInOfflineMode},
-	firstCompressedFile: firstCompressedFile,
-	lastCompressedFile: lastCompressedFile,
-	containsCompressed: containsCompressed,
-	splitPath: splitPath,
-	isParentPath: isParentPath,
-	simpleExists: simpleExists,
-	replaceReservedCharacters: replaceReservedCharacters,
-	macosSecurityScopedBookmarks: macosSecurityScopedBookmarks,
-	dirSize: dirSize,
-	dirSizeSync: dirSizeSync,
+    file: function (path, _config = false) {
+        return new file(path, _config);
+    },
+    fileCompressed: function (path, realPath = false, forceType = false, prefixes = false) { // This consider moving it to a separate file
+        return new fileCompressed(path, realPath, forceType, prefixes);
+    },
+    removeTmpVector: removeTmpVector,
+    removePathPart: removePathPart,
+    filtered: filtered,
+    sort: sort,
+    realPath: realPath,
+    pathType: pathType,
+    isCompressed: isCompressed,
+    isServer: isServer,
+    setServerInOfflineMode: setServerInOfflineMode,
+    serverInOfflineMode: function () {
+        return serverInOfflineMode
+    },
+    firstCompressedFile: firstCompressedFile,
+    lastCompressedFile: lastCompressedFile,
+    containsCompressed: containsCompressed,
+    splitPath: splitPath,
+    isParentPath: isParentPath,
+    simpleExists: simpleExists,
+    replaceReservedCharacters: replaceReservedCharacters,
+    macosSecurityScopedBookmarks: macosSecurityScopedBookmarks,
+    dirSize: dirSize,
+    dirSizeSync: dirSizeSync,
 }
